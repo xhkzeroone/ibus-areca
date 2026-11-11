@@ -17,8 +17,7 @@ struct SentenceCapitalizationState {
 // Update sentence-boundary state and return the keysym that should be sent to
 // Bamboo. Only ASCII a-z is changed; Bamboo remains responsible for producing
 // the selected Vietnamese output charset.
-im::KeySym
-capitalizeAfterSentenceBoundary(SentenceCapitalizationState &state,
-                                im::KeySym sym);
+im::KeySym capitalizeAfterSentenceBoundary(SentenceCapitalizationState &state,
+                                           im::KeySym sym);
 
 } // namespace areca

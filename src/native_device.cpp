@@ -351,7 +351,7 @@ struct NativeDevice::Impl {
     eiSource = eventLoop.addIOEvent(
         ei_get_fd(connection),
         im::IOEventFlags{im::IOEventFlag::In, im::IOEventFlag::Hup,
-                            im::IOEventFlag::Err},
+                         im::IOEventFlag::Err},
         [this](im::EventSourceIO *, int, im::IOEventFlags flags) {
           return handleEi(flags);
         });
@@ -363,8 +363,7 @@ struct NativeDevice::Impl {
   }
 
   bool handlePortalResult(im::IOEventFlags flags) {
-    if (flags.test(im::IOEventFlag::Hup) ||
-        flags.test(im::IOEventFlag::Err)) {
+    if (flags.test(im::IOEventFlag::Hup) || flags.test(im::IOEventFlag::Err)) {
       failToXTest("portal worker notification channel closed");
       return false;
     }
@@ -394,8 +393,7 @@ struct NativeDevice::Impl {
   }
 
   bool handleEi(im::IOEventFlags flags) {
-    if (flags.test(im::IOEventFlag::Hup) ||
-        flags.test(im::IOEventFlag::Err)) {
+    if (flags.test(im::IOEventFlag::Hup) || flags.test(im::IOEventFlag::Err)) {
       failToXTest("EIS connection closed");
       return false;
     }
@@ -442,7 +440,7 @@ struct NativeDevice::Impl {
     resultSource = eventLoop.addIOEvent(
         resultFd,
         im::IOEventFlags{im::IOEventFlag::In, im::IOEventFlag::Hup,
-                            im::IOEventFlag::Err},
+                         im::IOEventFlag::Err},
         [this](im::EventSourceIO *, int, im::IOEventFlags flags) {
           return handlePortalResult(flags);
         });

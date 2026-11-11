@@ -33,8 +33,7 @@ public:
     }
     source_->setOneShot();
 
-    wakeup_ =
-        eventLoop_.addDeferEvent([](im::EventSource *) { return false; });
+    wakeup_ = eventLoop_.addDeferEvent([](im::EventSource *) { return false; });
     if (wakeup_) {
       wakeup_->setOneShot();
     }

@@ -61,8 +61,8 @@ public:
   using RestoreSurroundingTextProvider = std::function<bool()>;
   using MacroBypassMatcher = std::function<bool(const im::Key &)>;
   using FinalizedWordEraseDone = std::function<void(bool)>;
-  using FinalizedWordEraser = std::function<bool(
-      im::InputContext &, uint32_t, FinalizedWordEraseDone)>;
+  using FinalizedWordEraser =
+      std::function<bool(im::InputContext &, uint32_t, FinalizedWordEraseDone)>;
 
   PreeditModeHandler(
       StateFactory &stateFactory, DebugProvider debugProvider,

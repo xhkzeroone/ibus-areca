@@ -4,9 +4,8 @@
 
 namespace areca {
 
-im::KeySym
-capitalizeAfterSentenceBoundary(SentenceCapitalizationState &state,
-                                im::KeySym sym) {
+im::KeySym capitalizeAfterSentenceBoundary(SentenceCapitalizationState &state,
+                                           im::KeySym sym) {
   auto result = sym;
   if (state.capitalizeNextLetter) {
     if (sym >= im::Key_a && sym <= im::Key_z) {

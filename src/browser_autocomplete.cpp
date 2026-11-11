@@ -22,8 +22,7 @@ size_t utf8ByteOffsetForCharIndex(const std::string &text, size_t charIndex) {
 
 size_t utf8CharIndexForByteOffset(const std::string &text, size_t byteOffset) {
   byteOffset = std::min(byteOffset, text.size());
-  return im::utf8::length(
-      std::string(text.begin(), text.begin() + byteOffset));
+  return im::utf8::length(std::string(text.begin(), text.begin() + byteOffset));
 }
 
 } // namespace

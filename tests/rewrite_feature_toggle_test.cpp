@@ -641,7 +641,6 @@ int main() {
   assert(!advancedConfig.useXTestInsteadOfUinput.value());
   assert(advancedConfig.surroundingProbeTimeoutMs.value() == 80);
 
-
   areca::ArecaConfig mainConfig;
   assert(!mainConfig.shiftSelectFallbackForBrowser.value());
   assert(mainConfig.useBackspaceForUrl.value());

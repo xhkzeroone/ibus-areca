@@ -18,8 +18,7 @@ class XTestBackspaceBackend final : public RewriteBackend {
 public:
   using DebugProvider = std::function<bool()>;
 
-  XTestBackspaceBackend(im::EventLoop &eventLoop,
-                        XTestBackspaceDevice &device,
+  XTestBackspaceBackend(im::EventLoop &eventLoop, XTestBackspaceDevice &device,
                         AdaptiveWait &adaptiveWait,
                         DebugProvider debugProvider);
   ~XTestBackspaceBackend() override;

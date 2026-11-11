@@ -39,8 +39,8 @@ int main() {
   state.reset();
   areca::capitalizeAfterSentenceBoundary(state, areca::im::Key_exclam);
   areca::capitalizeAfterSentenceBoundary(state, areca::im::Key_space);
-  assert(areca::capitalizeAfterSentenceBoundary(state, areca::im::Key_BackSpace) ==
-         areca::im::Key_BackSpace);
+  assert(areca::capitalizeAfterSentenceBoundary(
+             state, areca::im::Key_BackSpace) == areca::im::Key_BackSpace);
   assert(areca::capitalizeAfterSentenceBoundary(state, areca::im::Key_e) ==
          areca::im::Key_e);
 

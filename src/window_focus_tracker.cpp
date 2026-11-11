@@ -3,10 +3,10 @@
 #include "atspi/atspi_accessible.h"
 #include "atspi/atspi_connection.h"
 
+#include "im/im.h"
 #include <chrono>
 #include <cstring>
 #include <dbus/dbus.h>
-#include "im/im.h"
 
 namespace areca {
 

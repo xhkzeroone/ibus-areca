@@ -1,9 +1,9 @@
 #include "mouse_click_tracker.h"
 
+#include "im/im.h"
 #include <cerrno>
 #include <csignal>
 #include <cstring>
-#include "im/im.h"
 #include <fcntl.h>
 #include <spawn.h>
 #include <sys/wait.h>

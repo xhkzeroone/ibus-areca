@@ -8,9 +8,10 @@
 
 namespace areca {
 
-// Helper riêng đọc libinput; lớp này chỉ nhận thông báo trên event loop của engine.
-// Mọi phương thức chạy cùng event loop nên không cần thread, mutex hay atomic;
-// việc reset engine thuộc về ArecaEngine để tuân theo trạng thái scheduler.
+// Helper riêng đọc libinput; lớp này chỉ nhận thông báo trên event loop của
+// engine. Mọi phương thức chạy cùng event loop nên không cần thread, mutex hay
+// atomic; việc reset engine thuộc về ArecaEngine để tuân theo trạng thái
+// scheduler.
 class MouseClickTracker {
 public:
   explicit MouseClickTracker(im::EventLoop &loop,

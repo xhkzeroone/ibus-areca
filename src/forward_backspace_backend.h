@@ -17,8 +17,7 @@ class ForwardBackspaceBackend final : public RewriteBackend {
 public:
   using DebugProvider = std::function<bool()>;
 
-  ForwardBackspaceBackend(im::EventLoop &eventLoop,
-                          AdaptiveWait &adaptiveWait,
+  ForwardBackspaceBackend(im::EventLoop &eventLoop, AdaptiveWait &adaptiveWait,
                           DebugProvider debugProvider);
   ~ForwardBackspaceBackend() override;
 
