@@ -52,6 +52,7 @@ target_link_libraries(areca-mouse-monitor PRIVATE PkgConfig::LIBINPUT PkgConfig:
 install(TARGETS areca-mouse-monitor DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
 
 add_library(areca-core STATIC
+    src/im/action.cpp
     src/im/event.cpp
     src/im/input_context.cpp
     src/im/key.cpp
@@ -104,6 +105,21 @@ else()
 endif()
 add_dependencies(areca-core areca-mouse-monitor)
 
+# Lõi engine dùng chung mọi input context, phụ thuộc host trừu tượng nên test
+# được khi chưa có IBus.
+add_library(areca-engine STATIC
+    src/areca_engine.cpp
+    src/areca_engine_actions.cpp
+    src/areca_engine_backend.cpp
+    src/areca_engine_backend_menu.cpp
+    src/areca_engine_config.cpp
+    src/notification/dynamic_island_announcement.cpp
+)
+target_compile_options(areca-engine PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_definitions(areca-engine PRIVATE
+    ARECA_SETTINGS_PATH="${CMAKE_INSTALL_FULL_BINDIR}/ibus-areca-settings")
+target_link_libraries(areca-engine PUBLIC areca-core)
+
 if(BUILD_TESTING)
     add_executable(mouse_click_tracker_helper tests/mouse_click_tracker_helper.cpp)
     file(GLOB ARECA_TESTS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/tests"
@@ -115,6 +131,7 @@ if(BUILD_TESTING)
         target_link_libraries(${name} PRIVATE areca-core)
         add_test(NAME ${name} COMMAND ${name})
     endforeach()
+    target_link_libraries(areca_engine_test PRIVATE areca-engine)
     # Biên dịch lại tracker để trỏ tới helper giả thay vì đường dẫn cài đặt.
     target_sources(mouse_click_tracker_test PRIVATE src/mouse_click_tracker.cpp)
     add_dependencies(mouse_click_tracker_test mouse_click_tracker_helper)

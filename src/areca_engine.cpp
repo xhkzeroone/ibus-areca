@@ -1,0 +1,606 @@
+#include "areca_engine.h"
+
+#include "notification/dynamic_island_announcement.h"
+
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <exception>
+#include <iterator>
+#include <utility>
+
+#include "im/im.h"
+#include "program_compatibility.h"
+
+#include "mouse_click_tracker.h"
+#include "window_focus_tracker.h"
+
+namespace areca {
+
+ArecaEngine::ArecaEngine(EngineHost &host)
+    : host_(host), rewriteStateFactory_([this](im::InputContext &) {
+        return new RewriteInputState(
+            config_.bambooInputMethod.value(),
+            config_.spellcheckMode.value() != SpellcheckMode::Off,
+            config_.spellcheckMode.value() == SpellcheckMode::Realtime,
+            config_.modernStyle.value(), config_.outputCharset.value(),
+            config_.enableMacro.value(), config_.capitalizeMacro.value(),
+            macroRevision_, macroDefinitions(),
+            config_.revertMacroOnBackspace.value());
+      }),
+      preeditStateFactory_([this](im::InputContext &) {
+        return new PreeditInputState(
+            config_.bambooInputMethod.value(),
+            config_.spellcheckMode.value() != SpellcheckMode::Off,
+            config_.spellcheckMode.value() == SpellcheckMode::Realtime,
+            config_.modernStyle.value(), config_.outputCharset.value(),
+            config_.enableMacro.value(), config_.capitalizeMacro.value(),
+            macroRevision_, macroDefinitions(),
+            config_.revertMacroOnBackspace.value());
+      }),
+      adaptiveWaitMonitor_(host_.eventLoop(), adaptiveWait_,
+                           [this]() { return debugEnabled(); }),
+      surroundingBackend_(
+          host_.eventLoop(), [this]() { return debugEnabled(); },
+          [this](im::InputContext &inputContext) {
+            handleSurroundingProbeSucceeded(inputContext);
+          },
+          [this](im::InputContext &inputContext) {
+            handleSurroundingProbeFailed(inputContext);
+          },
+          [this](im::InputContext &inputContext) -> RewriteBackend * {
+            return resolveSurroundingFallbackBackend(inputContext);
+          },
+          &adaptiveWait_),
+      surroundingV2Backend_(
+          host_.eventLoop(), [this]() { return debugEnabled(); },
+          [this](im::InputContext &inputContext) {
+            handleSurroundingProbeSucceeded(inputContext);
+          },
+          [this](im::InputContext &inputContext) {
+            handleSurroundingProbeFailed(inputContext);
+          },
+          [this](im::InputContext &inputContext) -> RewriteBackend * {
+            return resolveSurroundingFallbackBackend(inputContext);
+          },
+          &adaptiveWait_),
+      forwardBackspaceBackend_(host_.eventLoop(), adaptiveWait_,
+                               [this]() { return debugEnabled(); }),
+      uinputDevice_([this]() { return debugEnabled(); },
+                    [this]() { notifyUinputUnavailable(); }),
+      uinputBackspaceBackend_(host_.eventLoop(), uinputDevice_, adaptiveWait_,
+                              [this]() { return debugEnabled(); }),
+      uinputShiftSelectBackend_(host_.eventLoop(), uinputDevice_, adaptiveWait_,
+                                [this]() { return debugEnabled(); }),
+      nativeDevice_(host_.eventLoop(), [this]() { return debugEnabled(); }),
+      xtestBackspaceBackend_(host_.eventLoop(), nativeDevice_, adaptiveWait_,
+                             [this]() { return debugEnabled(); }),
+      xtestShiftSelectBackend_(host_.eventLoop(), nativeDevice_, adaptiveWait_,
+                               [this]() { return debugEnabled(); }),
+      backendSelectionPost_(host_.eventLoop()),
+      scheduler_(
+          host_.eventLoop(),
+          [this](im::InputContext &inputContext) -> VietnameseEngine * {
+            auto *state = inputContext.propertyFor(&rewriteStateFactory_);
+            return state ? state->engine.get() : nullptr;
+          },
+          [this](im::InputContext &inputContext) {
+            return timing(inputContext);
+          },
+          [this]() { return debugEnabled(); },
+          [this](im::InputContext &inputContext,
+                 const BambooResult &result) -> RewriteBackendSelection {
+            auto selection = selectRewriteBackend(inputContext, result);
+            noteRewriteBackendChoice(inputContext, selection.backend);
+            return selection;
+          }),
+      rewriteHandler_(
+          host_.eventLoop(), rewriteStateFactory_, scheduler_,
+          [this]() { return config_.autoCapitalizeAfterPunctuation.value(); },
+          [this]() { return debugEnabled(); },
+          [this](im::InputContext &inputContext, const char *reason) {
+            protectBackendVerdict(inputContext, reason);
+          },
+          [this]() { return backspaceRecoveryEnabled(); },
+          [this](im::InputContext &inputContext) {
+            if (!advancedConfig_.forwardFirstCharacter.value()) {
+              return false;
+            }
+            auto *state = inputContext.propertyFor(&rewriteStateFactory_);
+            return inputTypeDetector_.isBrowser(
+                resolveProgram(inputContext, state));
+          },
+          [this](im::InputContext &inputContext) {
+            if (!config_.restoreSurroundingText.value()) {
+              return false;
+            }
+            // TODO: Chromium đôi khi giữ getText()/SurroundingText cũ sau khi
+            // người dùng Backspace sạch address bar. Tạm tắt restore tại đây
+            // cho đến khi có shadow snapshot đồng bộ được từng lần xóa. Chỉ
+            // tin CapabilityFlag::Url cho quyết định này; nhận diện Omnibox
+            // bằng AT-SPI có thể lẹm sang input khác khi focus chuyển nhanh.
+            if (inputContext.capabilityFlags().test(im::CapabilityFlag::Url)) {
+              return false;
+            }
+            // App không xoá được bằng surrounding thì snapshot của nó cũng
+            // không đáng tin (vd. anvildroid-gui sau Ctrl+A rồi Backspace vẫn
+            // báo đuôi "đư" của từ cũ, restore nạp nhầm vào ô đã trống).
+            if (!surroundingBackendInUse(inputContext)) {
+              if (debugEnabled()) {
+                ARECA_INFO() << "areca: surrounding restore disabled"
+                             << " reason=non-surrounding-backend"
+                             << " program=" << inputContext.program();
+              }
+              return false;
+            }
+            return true;
+          },
+          [this](const im::Key &key) {
+            return isMacroBypassSpace(key, config_.macroBypassModifier.value());
+          }),
+      preeditHandler_(
+          preeditStateFactory_, [this]() { return debugEnabled(); },
+          [this]() { return config_.autoCapitalizeAfterPunctuation.value(); },
+          [this]() { return backspaceRecoveryEnabled(); },
+          // Preedit không restore từ surrounding: restore phải xoá từ cũ khỏi
+          // ứng dụng theo snapshot, snapshot sai là xoá nhầm chữ. Tắt hẳn,
+          // không theo RestoreSurroundingText.
+          [] { return false; },
+          [this](const im::Key &key) {
+            return isMacroBypassSpace(key, config_.macroBypassModifier.value());
+          },
+          [this](im::InputContext &inputContext, uint32_t backspaceCount,
+                 PreeditModeHandler::FinalizedWordEraseDone onDone) {
+            return eraseFinalizedPreeditWord(inputContext, backspaceCount,
+                                             std::move(onDone));
+          }) {
+  inputMethodAnnouncement_ = std::make_unique<DynamicIslandAnnouncement>(
+      InputMethodIdentity{"areca", "Bộ gõ ArecaIME", "ibus-areca"});
+  scheduler_.setCommitObserver([this](im::InputContext &inputContext,
+                                      uint32_t deleteCount,
+                                      const std::string &text) {
+    rewriteHandler_.noteCommitted(inputContext, deleteCount, text);
+  });
+  config_.bambooInputMethod.annotation().setList(
+      BambooEngineAdapter::inputMethodNames());
+  config_.outputCharset.annotation().setList(
+      BambooEngineAdapter::charsetNames());
+  reloadConfig();
+  focusTracker_ = std::make_unique<WindowFocusTracker>(debugEnabled());
+  // Keep AT-SPI monitoring alive in the background. The worker reconnects
+  // when the accessibility bus appears, so fallback data is cached before a
+  // Chromium frontend without CapabilityFlag::Url needs it.
+  focusTracker_->start();
+  inputTypeDetector_.setFocusTracker(focusTracker_.get());
+
+  initActions();
+}
+
+void ArecaEngine::surroundingTextUpdated(im::InputContext &inputContext) {
+  // Nếu backend đang ở giai đoạn probe, thông báo để nó xác nhận thành công và
+  // hủy deadline timer probe.
+  if (surroundingBackend_.isProbing()) {
+    surroundingBackend_.notifySurroundingTextUpdated(inputContext);
+  }
+  if (surroundingV2Backend_.isProbing()) {
+    surroundingV2Backend_.notifySurroundingTextUpdated(inputContext);
+  }
+  // Callback chỉ ghi nhận rằng frontend đã đổi text hoặc cursor. Việc đọc và
+  // phục hồi được hoãn tới key press để không sửa Bamboo trong event lifecycle
+  // và để nhận snapshot surrounding mới nhất.
+  rewriteHandler_.onSurroundingTextUpdated(inputContext);
+  if (auto *state = preeditHandler_.stateFor(inputContext)) {
+    state->surroundingRestoreArmed = true;
+  }
+}
+
+void ArecaEngine::announceSwitchedIn() {
+  if (inputMethodAnnouncement_) {
+    inputMethodAnnouncement_->announce();
+  }
+}
+
+ArecaEngine::~ArecaEngine() {
+  inputTypeDetector_.setFocusTracker(nullptr);
+  if (focusTracker_) {
+    focusTracker_->stop();
+  }
+}
+
+bool ArecaEngine::eraseFinalizedPreeditWord(
+    im::InputContext &inputContext, uint32_t backspaceCount,
+    PreeditModeHandler::FinalizedWordEraseDone onDone) {
+  const std::string program = resolveProgram(inputContext, nullptr);
+  const bool preferHardware =
+      inputTypeDetector_.isTerminal(program, inputContext.frontend()) ||
+      !inputTypeDetector_.canForwardBackspaces(inputContext, program);
+  auto *backend = resolvePreferredBackspaceBackend(preferHardware);
+  if (!backend) {
+    return false;
+  }
+
+  const auto schedulerTiming = timing(inputContext);
+  RewritePlan plan;
+  plan.transactionId = nextPreeditRecoveryTransactionId_++;
+  if (!plan.transactionId) {
+    plan.transactionId = nextPreeditRecoveryTransactionId_++;
+  }
+  plan.backspaceCount = backspaceCount;
+  plan.backspaceDelayMs = schedulerTiming.backspaceDelayMs;
+  plan.uinputBackspaceAckTimeoutMs =
+      schedulerTiming.uinputBackspaceAckTimeoutMs;
+  plan.afterBackspaceWaitMs = schedulerTiming.afterBackspaceWaitMs;
+  plan.waylandAfterBackspaceWaitMs =
+      schedulerTiming.waylandAfterBackspaceWaitMs;
+  plan.ximAfterBackspaceWaitMs = schedulerTiming.ximAfterBackspaceWaitMs;
+  plan.fcitx4AfterBackspaceWaitMs = schedulerTiming.fcitx4AfterBackspaceWaitMs;
+  plan.dbusAfterBackspaceWaitMs = schedulerTiming.dbusAfterBackspaceWaitMs;
+  plan.ibusAfterBackspaceWaitMs = schedulerTiming.ibusAfterBackspaceWaitMs;
+  plan.xtestBackspaceDelayMs = schedulerTiming.xtestBackspaceDelayMs;
+  plan.afterXTestBackspaceWaitMs = schedulerTiming.afterXTestBackspaceWaitMs;
+  plan.waylandAfterXTestBackspaceWaitMs =
+      schedulerTiming.waylandAfterXTestBackspaceWaitMs;
+  plan.ximAfterXTestBackspaceWaitMs =
+      schedulerTiming.ximAfterXTestBackspaceWaitMs;
+  plan.fcitx4AfterXTestBackspaceWaitMs =
+      schedulerTiming.fcitx4AfterXTestBackspaceWaitMs;
+  plan.dbusAfterXTestBackspaceWaitMs =
+      schedulerTiming.dbusAfterXTestBackspaceWaitMs;
+  plan.ibusAfterXTestBackspaceWaitMs =
+      schedulerTiming.ibusAfterXTestBackspaceWaitMs;
+  plan.timerAccuracyUsec = schedulerTiming.timerAccuracyUsec;
+
+  const auto status = backend->apply(
+      inputContext, plan, [onDone](uint64_t, RewriteOutcome outcome) {
+        onDone(outcome == RewriteOutcome::Succeeded);
+      });
+  if (status == ApplyStatus::Completed) {
+    onDone(true);
+    return true;
+  }
+  if (status == ApplyStatus::Failed) {
+    onDone(false);
+    return false;
+  }
+  return true;
+}
+
+void ArecaEngine::notifyUinputUnavailable() {
+  host_.sendNotification(
+      "Areca không thể khởi tạo uinput",
+      "Hãy kiểm tra quyền truy cập /dev/uinput và bảo đảm module uinput đã "
+      "được bật, sau đó khởi động lại IBus. Xem hướng dẫn khởi nạp uinput "
+      "và cấp quyền tại https://github.com/xhkzeroone/ArecaIME#khởi-nạp-"
+      "uinput-và-cấp-quyền",
+      15000);
+}
+
+void ArecaEngine::scheduleDeviceWarmup() {
+  deviceWarmupTimer_.reset();
+  bool warmUpNative = advancedConfig_.useXTestInsteadOfUinput.value();
+  if (!warmUpNative) {
+    for (const auto &pair : appBackendOverridesMap_) {
+      if ((pair.second == AppBackendMode::ShiftSelect ||
+           pair.second == AppBackendMode::Backspace) &&
+          advancedConfig_.useXTestInsteadOfUinput.value()) {
+        warmUpNative = true;
+        break;
+      }
+    }
+  }
+  const uint64_t deadline = im::now(CLOCK_MONOTONIC);
+  deviceWarmupTimer_ = host_.eventLoop().addTimeEvent(
+      CLOCK_MONOTONIC, deadline, 0,
+      [this, warmUpNative](im::EventSourceTime *, uint64_t) {
+        auto timer = std::move(deviceWarmupTimer_);
+        // Warmup chỉ chuẩn bị thiết bị. Chỉ báo lỗi khi routing thực sự thử
+        // chọn uinput cho một thao tác gõ/xoá.
+        const bool uinputAvailable = uinputDevice_.warmUp();
+        const bool nativeStarted = warmUpNative && nativeDevice_.warmUp();
+        if (debugEnabled()) {
+          ARECA_INFO() << "areca: device warmup completed"
+                       << " uinput-available=" << uinputAvailable
+                       << " native-requested=" << warmUpNative
+                       << " native-started=" << nativeStarted;
+        }
+        return false;
+      });
+  if (deviceWarmupTimer_) {
+    deviceWarmupTimer_->setOneShot();
+  }
+}
+
+PresentationMode
+ArecaEngine::effectivePresentationMode(im::InputContext &inputContext) {
+  auto *state = inputContext.propertyFor(&rewriteStateFactory_);
+  const std::string program = resolveProgram(inputContext, state);
+  if (!program.empty()) {
+    const auto it = appBackendOverridesMap_.find(program);
+    if (it != appBackendOverridesMap_.end()) {
+      return presentationModeForAppSetting(it->second, activePresentationMode_);
+    }
+  }
+  return activePresentationMode_;
+}
+
+InputModeHandler &ArecaEngine::handlerFor(im::InputContext &inputContext) {
+  switch (effectivePresentationMode(inputContext)) {
+  case PresentationMode::Preedit:
+    return preeditHandler_;
+  case PresentationMode::Redirect:
+    return redirectHandler_;
+  case PresentationMode::Rewrite:
+    return rewriteHandler_;
+  }
+  return rewriteHandler_;
+}
+
+const char *ArecaEngine::presentationModeName(PresentationMode mode) {
+  switch (mode) {
+  case PresentationMode::Rewrite:
+    return "Rewrite";
+  case PresentationMode::Preedit:
+    return "Preedit";
+  case PresentationMode::Redirect:
+    return "Redirect (EN)";
+  }
+  return "Rewrite";
+}
+
+std::string ArecaEngine::subMode(im::InputContext &inputContext) {
+  return presentationModeName(effectivePresentationMode(inputContext));
+}
+
+std::string ArecaEngine::overrideIcon() {
+  const auto &icon = config_.trayIcon.value();
+  return icon.empty() ? "ibus-areca" : icon;
+}
+
+std::string ArecaEngine::subModeLabel(im::InputContext &inputContext) {
+  return "Ă  " + config_.bambooInputMethod.value() + " \xC2\xB7 " +
+         presentationModeName(effectivePresentationMode(inputContext));
+}
+
+void ArecaEngine::switchPresentationMode(im::InputContext &inputContext) {
+  if (scheduler_.rewritePending()) {
+    if (debugEnabled()) {
+      ARECA_INFO() << "areca: mode hotkey ignored while rewrite pending";
+    }
+    return;
+  }
+
+  const auto current = activePresentationMode_;
+  PresentationMode next = PresentationMode::Rewrite;
+  switch (current) {
+  case PresentationMode::Rewrite:
+    next = PresentationMode::Preedit;
+    break;
+  case PresentationMode::Preedit:
+    next = PresentationMode::Redirect;
+    break;
+  case PresentationMode::Redirect:
+    next = PresentationMode::Rewrite;
+    break;
+  }
+
+  rewriteHandler_.resetContext(inputContext);
+  preeditHandler_.resetContext(inputContext);
+  config_.presentationMode.setValue(next);
+  applyConfig();
+  handlerFor(inputContext).activate(inputContext);
+  save();
+
+  if (debugEnabled()) {
+    ARECA_INFO() << "areca: switch mode hotkey mode="
+                 << presentationModeName(next)
+                 << " program=" << inputContext.program();
+  }
+  host_.showInputMethodInformation(&inputContext, subModeLabel(inputContext));
+  updateUI(&inputContext);
+}
+
+void ArecaEngine::activate(im::InputContext &activated) {
+  auto *inputContext = &activated;
+  if (focusTracker_)
+    focusTracker_->requestAccessibilityPoke();
+  const PresentationMode presentationMode =
+      effectivePresentationMode(*inputContext);
+  if (presentationMode == PresentationMode::Rewrite) {
+    clearBackendVerdictForLifecycle(*inputContext, "activate");
+  }
+  // Thử lại nếu helper đã mất kết nối. Bỏ click đã nhận trước activation để
+  // thao tác ở context cũ không làm reset trạng thái của context vừa kích hoạt.
+  if (mouseTracker_) {
+    mouseTracker_->start();
+    if (mouseTracker_->hasPendingClick() && debugEnabled())
+      ARECA_INFO() << "areca: discard pending mouse click on activation";
+    mouseTracker_->clearPendingClick();
+  }
+  handlerFor(*inputContext).activate(*inputContext);
+  if (debugEnabled()) {
+    ARECA_INFO() << "areca: activate presentation_mode="
+                 << presentationModeName(presentationMode)
+                 << " program=" << inputContext->program();
+  }
+  auto &statusArea = inputContext->statusArea();
+  statusArea.addAction(im::StatusGroup::InputMethod, inputMethodAction_.get());
+  statusArea.addAction(im::StatusGroup::InputMethod, charsetAction_.get());
+  // statusArea.addAction(im::StatusGroup::InputMethod,
+  //                      presentationModeAction_.get());
+  statusArea.addAction(im::StatusGroup::InputMethod, spellcheckAction_.get());
+  statusArea.addAction(im::StatusGroup::InputMethod, modernStyleAction_.get());
+  statusArea.addAction(im::StatusGroup::InputMethod, macroAction_.get());
+  statusArea.addAction(im::StatusGroup::InputMethod,
+                       autoCapitalizeAction_.get());
+  statusArea.addAction(im::StatusGroup::InputMethod, settingsAction_.get());
+  updateUI(inputContext);
+}
+
+void ArecaEngine::keyEvent(im::KeyEvent &event) {
+  auto *inputContext = event.inputContext();
+  if (!inputContext) {
+    return;
+  }
+  if (inputContext->capabilityFlags().test(im::CapabilityFlag::Password)) {
+    if (isBackendSelecting(*inputContext)) {
+      inputContext->inputPanel().reset();
+      inputContext->updateUserInterface(im::UserInterfaceComponent::InputPanel,
+                                        true);
+    }
+    handlerFor(*inputContext).handleKeyEvent(event);
+    return;
+  }
+  // Giống ô mật khẩu: terminal được chuyển tiếp nguyên phím, không qua Bamboo.
+  if (config_.disableVietnameseInTerminal.value() &&
+      inputTypeDetector_.isTerminal(
+          resolveProgram(*inputContext,
+                         inputContext->propertyFor(&rewriteStateFactory_)),
+          inputContext->frontend())) {
+    if (isBackendSelecting(*inputContext)) {
+      inputContext->inputPanel().reset();
+      inputContext->updateUserInterface(im::UserInterfaceComponent::InputPanel,
+                                        true);
+    }
+    if (!event.isRelease()) {
+      handlerFor(*inputContext).resetContext(*inputContext);
+    }
+    event.forward();
+    return;
+  }
+  if (isBackendSelecting(*inputContext)) {
+    const auto normKey = event.key().normalize();
+    if (!event.isRelease() &&
+        normKey.checkKeyList(config_.selectBackendKey.value())) {
+      inputContext->inputPanel().reset();
+      inputContext->updateUserInterface(im::UserInterfaceComponent::InputPanel,
+                                        true);
+      event.forward();
+      return;
+    }
+    if (handleBackendSelectionKey(*inputContext, event)) {
+      event.filterAndAccept();
+      return;
+    }
+  }
+  // Backend nhận phím inject trước RewriteMode để giữ nguyên state.
+  if (uinputBackspaceBackend_.handleBackspace(event)) {
+    return;
+  }
+  // Shift-select forward Left và chờ Shift up quay lại trước khi commit.
+  if (uinputShiftSelectBackend_.handleKeyEvent(event)) {
+    return;
+  }
+  if (!event.isRelease()) {
+    // Resolve program một lần để nhận diện address bar dùng cùng verdict trong
+    // toàn bộ lượt xử lý phím.
+    auto *state = inputContext->propertyFor(&rewriteStateFactory_);
+    resolveProgram(*inputContext, state);
+
+    // Sau click, bỏ state của caret cũ để phím kế tiếp có thể phục hồi phần từ
+    // nằm trước caret mới. Preedit chỉ làm việc này khi composition đã trống,
+    // tránh làm mất chữ nếu frontend chưa kết thúc preedit đang hiển thị.
+    if (mouseTracker_ && mouseTracker_->hasPendingClick()) {
+      const auto mode = effectivePresentationMode(*inputContext);
+      if (mode == PresentationMode::Preedit) {
+        const bool prepared =
+            preeditHandler_.prepareSurroundingRestoreAfterClick(*inputContext);
+        if (debugEnabled())
+          ARECA_INFO() << "areca: preedit mouse restore "
+                       << (prepared ? "armed" : "skipped-active-composition");
+        mouseTracker_->clearPendingClick();
+      } else if (mode != PresentationMode::Rewrite) {
+        if (debugEnabled())
+          ARECA_INFO() << "areca: discard mouse reset mode="
+                       << presentationModeName(mode);
+        mouseTracker_->clearPendingClick();
+      } else if (scheduler_.shouldRejectReset()) {
+        // Giữ click cho lần sau nếu rewrite đang xóa/chèn chữ.
+        if (debugEnabled())
+          ARECA_INFO() << "areca: mouse reset deferred (rewrite protection)";
+      } else {
+        if (debugEnabled())
+          ARECA_INFO() << "areca: applying mouse reset mode="
+                       << presentationModeName(mode);
+        rewriteHandler_.resetContext(*inputContext);
+        clearBackendVerdictForLifecycle(*inputContext, "mouse-click");
+        mouseTracker_->clearPendingClick();
+      }
+    }
+    const auto key = event.key().normalize();
+    // if (key.sym() != im::Key_None &&
+    //     key.checkKeyList(config_.switchModeKey.value())) {
+    //   if (inputContext->capabilityFlags().test(
+    //           im::CapabilityFlag::Password)) {
+    //     handlerFor(*inputContext).handleKeyEvent(event);
+    //     return;
+    //   }
+    //   event.filterAndAccept();
+    //   switchPresentationMode(*inputContext);
+    //   return;
+    // }
+
+    if (key.sym() != im::Key_None &&
+        key.checkKeyList(config_.selectBackendKey.value())) {
+      if (inputContext->capabilityFlags().test(im::CapabilityFlag::Password)) {
+        handlerFor(*inputContext).handleKeyEvent(event);
+        return;
+      }
+      bool isComposing = false;
+      const PresentationMode presentationMode =
+          effectivePresentationMode(*inputContext);
+      if (presentationMode == PresentationMode::Rewrite) {
+        if (state && state->engine && !state->engine->currentText().empty()) {
+          isComposing = true;
+        }
+      } else if (presentationMode == PresentationMode::Preedit) {
+        auto *preState = inputContext->propertyFor(&preeditStateFactory_);
+        if (preState && !preState->composing.empty()) {
+          isComposing = true;
+        }
+      }
+      if (!isComposing && !scheduler_.rewritePending()) {
+        event.filterAndAccept();
+        showBackendSelectionMenu(*inputContext);
+        return;
+      }
+    }
+  }
+  handlerFor(*inputContext).handleKeyEvent(event);
+}
+
+void ArecaEngine::deactivate(im::InputContext &deactivated) {
+  auto *inputContext = &deactivated;
+  backendSelectionPost_.cancel();
+  if (isBackendSelecting(*inputContext)) {
+    inputContext->inputPanel().reset();
+    inputContext->updateUserInterface(im::UserInterfaceComponent::InputPanel,
+                                      true);
+  }
+  const PresentationMode presentationMode =
+      effectivePresentationMode(*inputContext);
+  if (presentationMode == PresentationMode::Rewrite) {
+    clearBackendVerdictForLifecycle(*inputContext, "deactivate");
+  }
+  handlerFor(*inputContext).deactivate(*inputContext);
+}
+
+void ArecaEngine::reset(im::InputContext &resetContext) {
+  if (auto *inputContext = &resetContext) {
+    if (scheduler_.shouldRejectReset()) {
+      if (debugEnabled()) {
+        ARECA_INFO() << "areca: app reset rejected (active rewrite or 50ms "
+                        "post-commit window)";
+      }
+      return;
+    }
+    if (effectivePresentationMode(*inputContext) == PresentationMode::Rewrite) {
+      clearBackendVerdictForLifecycle(*inputContext, "reset");
+    }
+    if (debugEnabled()) {
+      ARECA_INFO() << "areca: app reset requested; arm protected reset";
+    }
+    handlerFor(*inputContext).requestProtectedReset(*inputContext);
+  }
+}
+
+} // namespace areca

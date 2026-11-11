@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "action.h"
 #include "flags.h"
 #include "key.h"
 
@@ -232,6 +233,7 @@ public:
   SurroundingText &surroundingText() { return surroundingText_; }
   const SurroundingText &surroundingText() const { return surroundingText_; }
   InputPanel &inputPanel() { return inputPanel_; }
+  StatusArea &statusArea() { return statusArea_; }
 
   void commitString(const std::string &text) { commitStringImpl(text); }
   void deleteSurroundingText(int offset, unsigned int size);
@@ -270,6 +272,7 @@ private:
   bool hasFocus_ = false;
   SurroundingText surroundingText_;
   InputPanel inputPanel_;
+  StatusArea statusArea_;
   std::unordered_map<FactoryBase *, std::unique_ptr<InputContextProperty>>
       properties_;
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
