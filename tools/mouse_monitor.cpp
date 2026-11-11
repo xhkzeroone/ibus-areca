@@ -71,7 +71,7 @@ int main() {
     int result;
     do { result = poll(fds, 2, -1); } while (result < 0 && errno == EINTR);
     if (result < 0 || (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))) return 1;
-    // Theo dõi cả đầu ghi pipe để thoát khi Fcitx đóng đầu đọc hoặc crash,
+    // Theo dõi cả đầu ghi pipe để thoát khi engine đóng đầu đọc hoặc crash,
     // kể cả khi không còn click nào đánh thức libinput.
     if (fds[1].revents & (POLLERR | POLLHUP | POLLNVAL)) return 0;
   }

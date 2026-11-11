@@ -253,9 +253,8 @@ ARECA_CONFIGURATION(
     im::HiddenOption<int, im::IntConstrain> legacyPostCommitDelayMs{
         this, "PostCommitDelayMs", N_("Delay sau mỗi commit (ms)"), 20,
         im::IntConstrain(0, 5000)};
-    im::HiddenOption<std::string> trayIcon{this, "TrayIcon",
-                                           N_("Biểu tượng khay hệ thống"),
-                                           "org.fcitx.Fcitx5.fcitx-areca"};
+    im::HiddenOption<std::string> trayIcon{
+        this, "TrayIcon", N_("Biểu tượng khay hệ thống"), "ibus-areca"};
     im::OptionWithAnnotation<std::string, StringListAnnotation>
         bambooInputMethod{this, "BambooInputMethod", N_("Kiểu gõ Bamboo"),
                           "Telex 2"};
@@ -280,11 +279,6 @@ ARECA_CONFIGURATION(
         macroBypassModifier{this, "MacroBypassModifier",
                             N_("Phím giữ để tạm bỏ qua macro khi nhấn Space"),
                             MacroBypassModifier::Shift};
-    im::SubConfigOption macroEditor{this, "MacroEditor", N_("Chỉnh sửa macro"),
-                                    "fcitx://config/addon/areca/macro"};
-    im::SubConfigOption appOverridesEditor{this, "AppOverridesEditor",
-                                           N_("Cấu hình backend theo ứng dụng"),
-                                           "fcitx://config/addon/areca/apps"};
     im::Option<bool> backspaceRecovery{
         this, "BackspaceRecovery",
         N_("Khôi phục lỗi chính tả khi nhấn Backspace"), true};
@@ -301,9 +295,6 @@ ARECA_CONFIGURATION(
     im::Option<bool> disableVietnameseInTerminal{
         this, "DisableVietnameseInTerminal",
         N_("Tắt tiếng Việt trong terminal"), false};
-    im::SubConfigOption advancedEditor{this, "AdvancedEditor",
-                                       N_("Cấu hình nâng cao"),
-                                       "fcitx://config/addon/areca/advanced"};
     im::Option<bool> debug{this, "Debug", N_("Bật log debug Areca"), false};);
 
 } // namespace areca

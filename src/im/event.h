@@ -10,7 +10,7 @@
 #include "flags.h"
 
 // Event loop trên GLib main context mặc định, cùng giao diện với event loop
-// mà Areca dùng trên fcitx5 để code backend giữ nguyên.
+// mà backend Areca dùng.
 namespace areca::im {
 
 uint64_t now(clockid_t clock);

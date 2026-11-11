@@ -5,8 +5,8 @@
 #include <string>
 #include <string_view>
 
-// Các hàm UTF-8 cùng ngữ nghĩa với bản Areca chạy trên fcitx5, để code chép
-// sang giữ nguyên lời gọi.
+// Các hàm UTF-8 engine dùng: đếm ký tự, đổi vị trí ký tự sang byte, đọc từng
+// ký tự.
 namespace areca::im::utf8 {
 
 namespace detail {

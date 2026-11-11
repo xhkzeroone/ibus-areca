@@ -193,7 +193,7 @@ void IbusInputContext::showInformation(const std::string &text) {
 void IbusInputContext::refreshStatusArea() {
   IBusPropList *props = ibus_prop_list_new();
   // Panel IBus vẽ biểu tượng khay theo property InputMode, nên TrayIcon trong
-  // cấu hình đổi được biểu tượng như trên fcitx5.
+  // cấu hình đổi được biểu tượng khay.
   auto &engine = IbusHost::instance().engine();
   IBusProperty *inputMode = ibus_property_new(
       "InputMode", PROP_TYPE_NORMAL, newText(engine.subModeLabel(*this)),

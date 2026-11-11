@@ -199,8 +199,8 @@ void PreeditModeHandler::handleKeyEvent(im::KeyEvent &event) {
                        rawSym == im::Key_KP_Enter;
 
   // Modified and unsupported keys are not rebuilt. Commit the current Bamboo
-  // preedit, then let Fcitx forward the original event with its exact modifier
-  // and frontend metadata.
+  // preedit, then let IBus pass the original event on with its exact
+  // modifiers.
   if (!suppressMacro && hasPreeditShortcutModifier(normalizedKey)) {
     commitComposition(*inputContext, *state);
     state->sentenceCapitalization.reset();

@@ -10,8 +10,8 @@
 #include "key.h"
 #include "raw_config.h"
 
-// Khung cấu hình khai báo option như bản fcitx5 dùng, để areca_config.h giữ
-// nguyên tên khoá, giá trị mặc định và định dạng file.
+// Khung cấu hình khai báo option kèm tên khoá, giá trị mặc định và ràng buộc;
+// đọc/ghi file .conf dạng ini.
 namespace areca::im {
 
 class Configuration;
@@ -294,24 +294,6 @@ public:
 };
 
 using KeyListOption = Option<KeyList, KeyListConstrain>;
-
-// Mục mở trang cấu hình con; không có giá trị để lưu.
-class SubConfigOption final : public OptionBase {
-public:
-  SubConfigOption(Configuration *parent, std::string path,
-                  std::string description, std::string uri)
-      : OptionBase(parent, std::move(path), std::move(description)),
-        uri_(std::move(uri)) {}
-  const std::string &uri() const { return uri_; }
-  void reset() override {}
-  bool isDefault() const override { return true; }
-  void marshall(RawConfig &) const override {}
-  bool unmarshall(const RawConfig &, bool) override { return true; }
-  bool skipSave() const override { return true; }
-
-private:
-  std::string uri_;
-};
 
 inline void Configuration::load(const RawConfig &config, bool partial) {
   for (auto *option : options_) {

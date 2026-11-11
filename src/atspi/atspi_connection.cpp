@@ -54,7 +54,7 @@ std::string AtspiConnection::x11BusAddress() {
 std::string AtspiConnection::sessionBusAddress() {
   DbusErrorGuard error;
   // Kết nối riêng chỉ cho một lần hỏi địa chỉ: kết nối dùng chung của libdbus
-  // có thể đang được thư viện khác trong fcitx5 dùng, và mặc định thoát tiến
+  // có thể đang được thư viện khác trong engine dùng, và mặc định thoát tiến
   // trình khi session bus mất kết nối.
   DbusConnectionPtr session(dbus_bus_get_private(DBUS_BUS_SESSION, error.get()),
                             DbusConnectionDeleter{true});
@@ -118,7 +118,7 @@ AtspiConnection::connectToAddress(const std::string &address) {
 
   DbusErrorGuard error;
   // Phải là kết nối riêng: deleter gọi dbus_connection_close, mà libdbus abort
-  // cả fcitx5 khi đóng kết nối dùng chung lấy từ dbus_connection_open.
+  // cả engine khi đóng kết nối dùng chung lấy từ dbus_connection_open.
   DbusConnectionPtr bus(
       dbus_connection_open_private(address.c_str(), error.get()),
       DbusConnectionDeleter{true});

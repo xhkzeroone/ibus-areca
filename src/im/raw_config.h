@@ -8,15 +8,15 @@
 
 namespace areca::im {
 
-// Cây key/value theo đường dẫn "A/B/C", cùng cấu trúc với file .conf của
-// fcitx5: key cấp cao nằm đầu file, nhánh con thành section [A/B].
+// Cây key/value theo đường dẫn "A/B/C", cùng cấu trúc với file .conf: key cấp
+// cao nằm đầu file, nhánh con thành section [A/B].
 class RawConfig {
 public:
   const std::string &value() const { return value_; }
   void setValue(std::string value) { value_ = std::move(value); }
   const std::string &comment() const { return comment_; }
   void setComment(std::string comment) { comment_ = std::move(comment); }
-  // Giá trị mặc định thì ghi dạng comment như fcitx5 để file chỉ lộ chỗ đã đổi.
+  // Giá trị mặc định thì ghi dạng comment để file chỉ lộ chỗ đã đổi.
   bool commentedOut() const { return commentedOut_; }
   void setCommentedOut(bool value) { commentedOut_ = value; }
 

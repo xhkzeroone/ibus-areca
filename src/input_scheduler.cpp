@@ -65,7 +65,7 @@ bool InputScheduler::handleIdleKey(im::KeyEvent &event, uint32_t codepoint,
         ARECA_INFO() << "areca: idle key route=forward reason=unchanged-output";
       // Giữ trạng thái mới của Bamboo để a rồi s vẫn ghép thành á. Không commit
       // thêm hoặc tự cập nhật surrounding cache vì frontend sẽ giao phím gốc.
-      // forward() của Fcitx là getter; chính việc không filter/accept event mới
+      // forward() chỉ là getter; chính việc không filter/accept event mới
       // cho phím đi tiếp. Không tạo cặp phím giả bằng forwardKey ở đây.
       event.forward();
       if (commitObserver_) {

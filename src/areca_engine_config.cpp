@@ -23,7 +23,7 @@ std::string ArecaEngine::configPath(const char *relativePath) const {
 
 void ArecaEngine::readConfigFile(im::Configuration &config,
                                  const char *relativePath) {
-  // File chưa có thì giữ giá trị hiện tại, như khi đọc lần đầu trên fcitx5.
+  // File chưa có thì giữ giá trị hiện tại, vd. timing cũ vừa chép sang.
   im::RawConfig raw;
   if (im::readIniFile(raw, configPath(relativePath))) {
     config.load(raw);

@@ -201,7 +201,7 @@ private:
   bool isRelease_;
 };
 
-// Chỉ để test chép từ bản fcitx5 tạo context theo cùng cú pháp.
+// Chỉ để test tạo context theo cú pháp có manager.
 class FactoryBase;
 class InputContextManager {
 public:

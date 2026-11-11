@@ -39,7 +39,7 @@ struct ReliabilityDecision {
 class WindowFocusTracker;
 class MouseClickTracker;
 
-// Lõi bộ gõ dùng chung cho mọi input context, giống addon trên fcitx5. Engine
+// Lõi bộ gõ dùng chung cho mọi input context trong process. Engine
 // IBus của từng ô nhập chuyển sự kiện vào đây.
 class ArecaEngine final {
 public:
