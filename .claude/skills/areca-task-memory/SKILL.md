@@ -1,6 +1,6 @@
 ---
 name: areca-task-memory
-description: Cách làm việc tiết kiệm token trong repo ArecaIME - ghi nhớ tiến độ task vào file ghi chú, bản đồ dự án để khỏi dò lại, quy tắc đọc file, đọc log và chạy lệnh gọn. Dùng khi bắt đầu hoặc tiếp tục một task nhiều bước, khi phiên làm việc dài, trước khi context bị tóm tắt, hoặc khi người dùng dán log rất dài.
+description: Cách làm việc tiết kiệm token trong repo ibus-areca - ghi nhớ tiến độ task vào file ghi chú, bản đồ dự án để khỏi dò lại, quy tắc đọc file, đọc log và chạy lệnh gọn. Dùng khi bắt đầu hoặc tiếp tục một task nhiều bước, khi phiên làm việc dài, trước khi context bị tóm tắt, hoặc khi người dùng dán log rất dài.
 ---
 
 # Ghi nhớ task và tiết kiệm token
@@ -50,7 +50,7 @@ Phần **Đã bỏ / không làm** quan trọng nhất: nó ngăn đề xuất l
 |---|---|---|
 | `.claude/task-notes/*.md` | Tiến độ và quyết định của **một** task | "Firefox chỉ bỏ qua kiểm tra trễ, không bỏ probe" |
 | Auto memory (`~/.claude/projects/.../memory/`) | Sở thích, cách làm việc của người dùng dùng cho **mọi** task | "Không thêm dòng Co-Authored-By", "Người dùng tự push" |
-| Repo (`docs/`, skill, comment code) | Sự thật về code mà người khác cũng cần | Kiến trúc, chính sách backend, bất biến scheduler |
+| Repo (skill, comment code) | Sự thật về code mà người khác cũng cần | Kiến trúc, chính sách backend, bất biến scheduler |
 
 Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và sha là đủ.
 
@@ -58,26 +58,27 @@ Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và 
 
 | Cần tìm | Ở đâu |
 |---|---|
-| Kiến trúc, pipeline, chính sách backend | `docs/ARCHITECTURE.md` (đọc theo mục, đừng đọc cả file) |
 | Quy tắc code, nơi đặt hàm mới | skill `areca-code` |
-| Quy tắc PR | skill `areca-pr`, `CONTRIBUTING.md` |
-| Kiến thức port sang IBus | skill `areca-ibus-port` |
+| Lịch sử port, bảng đổi API sang IBus | skill `areca-ibus-port` |
+| Lớp tương thích (event loop, input context, key, config) | `src/im/` |
+| Engine IBus, property, lookup table, preedit | `src/ibus/` |
 | Nhận phím, chọn mode | `src/areca_engine.cpp` (`keyEvent`, `activate`, `reset`) |
 | Chọn backend, verdict, probe | `src/areca_engine_backend.cpp` (`selectRewriteBackend`, `evaluateReliability`) |
 | Config, `applyConfig`, `timing` | `src/areca_engine_config.cpp`, khai báo option ở `src/areca_config.h` |
-| Menu tray fcitx | `src/areca_engine_actions.cpp` |
+| Menu trạng thái (IBusProperty) | `src/areca_engine_actions.cpp`, vẽ ở `src/ibus/ibus_input_context.cpp` |
 | Rewrite / Preedit | `src/rewrite_mode.*`, `src/preedit_mode.*` |
 | Scheduler, cửa sổ chặn reset | `src/input_scheduler.*` |
 | So khớp snapshot, text đã biết | `src/surrounding_probe_match.h` |
 | Danh sách app đặc biệt | `src/program_compatibility.cpp` |
 | AT-SPI | `src/window_focus_tracker.cpp`, `src/atspi/` |
 | App cài đặt GTK | `gtk-settings/areca_settings.py` |
-| Version | `CMakeLists.txt`, `packaging/{arch,aur}/PKGBUILD`, `packaging/aur/.SRCINFO`, ví dụ trong `docs/AUR_PUBLISHING_GUIDE.md` và `packaging/aur/README.md` |
+| Cài / gỡ | `scripts/install.sh`, `scripts/uninstall.sh` |
+| Version | `project(... VERSION ...)` trong `CMakeLists.txt` |
 
 ## 4. Quy tắc đọc
 
 - **Tìm trước, đọc sau:** `grep -n` tên hàm hoặc chuỗi log, rồi đọc đúng khoảng bằng `sed -n 'a,bp'` hoặc `Read` với `offset`/`limit`.
-- **Không đọc cả các file lớn:** `docs/ARCHITECTURE.html`, `website/*.html` (hơn 4000 dòng mỗi file, chỉ là bản dựng từ markdown), `bamboo/` (submodule), `build*/`.
+- **Không đọc cả các file lớn:** `src/im/keysym.h` (sinh tự động), `bamboo/` (submodule), `build*/`.
 - **Đã đọc hoặc vừa sửa thì không đọc lại để kiểm tra:** Edit thất bại sẽ tự báo lỗi.
 - **Diff:** xem `git diff --stat` trước, chỉ mở diff đầy đủ của file cần xem.
 - **Câu hỏi rộng** ("chỗ nào dùng X", "có code nào làm Y"): giao cho subagent Explore và chỉ nhận kết luận, không kéo hàng chục file vào context.
@@ -85,10 +86,10 @@ Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và 
 
 ## 5. Log và output lệnh
 
-- **Log fcitx5 người dùng dán:** chỉ lấy các dòng quyết định, đừng diễn giải từng dòng. Các mẫu cần tìm:
+- **Log engine người dùng dán:** chỉ lấy các dòng quyết định, đừng diễn giải từng dòng. Các mẫu cần tìm:
   `rewrite select backend|reliability first-probe|stale during probe|probe succeeded|surrounding restore|reset rejected|app reset|bamboo result`.
 - **Gợi ý cho người dùng lệnh lọc sẵn** thay vì xin cả log:
-  `fcitx5 -rd 2>&1 | grep -E "<mẫu ở trên>"`.
+  `ibus-daemon -rxv 2>&1 | grep -E "<mẫu ở trên>"` (bật `Debug=True` trong `~/.config/ibus-areca/conf/areca.conf`).
 - **Build và test:** chỉ in phần cần, ví dụ
   `cmake --build build -j"$(nproc)" 2>&1 | grep -E "error|warning:"` và `ctest --test-dir build 2>&1 | grep -E "tests passed|failed"`.
   Chỉ chạy `--output-on-failure` khi có test hỏng.
@@ -96,10 +97,9 @@ Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và 
 
 ## 6. Quy trình lặp lại trong repo này (khỏi phải tìm lại)
 
-- Main checkout bị hook chặn sửa trực tiếp. Sửa trong worktree, commit, rồi `git -C <main> cherry-pick <sha>`. Worktree lệch thì `git reset --hard main`.
-- Không tự push. Người dùng tự tag và push. Commit không có dòng attribution.
-- Trước commit: `clang-format -i` các file đã sửa, `git clang-format --diff main` phải sạch, build không warning, `ctest` qua hết.
-- Sửa `docs/ARCHITECTURE.md` thì cập nhật luôn `docs/ARCHITECTURE.html`. Script dựng HTML nằm trong scratchpad và có thể đã mất; khi đó sửa tay đúng đoạn HTML tương ứng.
+- Repo nằm ở `~/Desktop/ibus-areca`, nhánh `main`, remote `origin` là GitHub. Chỉ push khi người dùng bảo. Commit không có dòng attribution.
+- Trước commit: `clang-format -i` các file đã sửa, build không warning, `ctest` qua hết; sửa `gtk-settings/` thì chạy thêm `python3 -m unittest discover -s gtk-settings/tests`.
+- Engine IBus chỉ build khi có `ibus-1.0` (pkg-config); phần còn lại build và test được khi chưa cài IBus.
 - Scratchpad bị dọn khi qua ngày: đừng để thứ cần giữ ở đó.
 
 ## 7. Khi phiên dài hoặc sắp bị tóm tắt
