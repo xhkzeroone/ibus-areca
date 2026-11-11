@@ -46,10 +46,10 @@ pkg_check_modules(LIBEI QUIET IMPORTED_TARGET libei-1.0>=1.0)
 pkg_check_modules(LIBPORTAL QUIET IMPORTED_TARGET libportal>=0.7.1)
 find_package(Threads REQUIRED)
 
-add_executable(areca-mouse-monitor tools/mouse_monitor.cpp)
-target_compile_options(areca-mouse-monitor PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(areca-mouse-monitor PRIVATE PkgConfig::LIBINPUT PkgConfig::UDEV)
-install(TARGETS areca-mouse-monitor DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
+add_executable(ibus-areca-mouse-monitor tools/mouse_monitor.cpp)
+target_compile_options(ibus-areca-mouse-monitor PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(ibus-areca-mouse-monitor PRIVATE PkgConfig::LIBINPUT PkgConfig::UDEV)
+install(TARGETS ibus-areca-mouse-monitor DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
 
 add_library(areca-core STATIC
     src/im/action.cpp
@@ -89,7 +89,7 @@ add_library(areca-core STATIC
 target_include_directories(areca-core PUBLIC src)
 target_compile_options(areca-core PRIVATE -Wall -Wextra -Wpedantic)
 target_compile_definitions(areca-core PRIVATE
-    ARECA_MOUSE_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/areca-mouse-monitor")
+    ARECA_MOUSE_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/ibus-areca-mouse-monitor")
 target_link_libraries(areca-core PUBLIC
     areca-bamboo Threads::Threads PkgConfig::GLIB PkgConfig::GIO
     PkgConfig::XKBCOMMON PkgConfig::DBUS PkgConfig::X11_CLIENT PkgConfig::XTEST
@@ -103,7 +103,7 @@ if(LIBEI_FOUND AND LIBPORTAL_FOUND)
 else()
     message(WARNING "Native Wayland backend disabled; XTest fallback will be used")
 endif()
-add_dependencies(areca-core areca-mouse-monitor)
+add_dependencies(areca-core ibus-areca-mouse-monitor)
 
 # Lõi engine dùng chung mọi input context, phụ thuộc host trừu tượng nên test
 # được khi chưa có IBus.
@@ -169,7 +169,7 @@ install(FILES gtk-settings/areca_settings.py gtk-settings/icon_library.py
         DESTINATION "${CMAKE_INSTALL_DATADIR}/ibus-areca/gtk-settings")
 install(DIRECTORY gtk-settings/assets
         DESTINATION "${CMAKE_INSTALL_DATADIR}/ibus-areca/gtk-settings")
-install(FILES "icons/hicolor/scalable/apps/areca-settings.svg"
+install(FILES "icons/hicolor/scalable/apps/ibus-areca-settings.svg"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/ibus-areca/icons/hicolor/scalable/apps")
 install(DIRECTORY icons/hicolor DESTINATION "${CMAKE_INSTALL_DATADIR}/icons")
 configure_file(data/areca-settings-launcher.in ibus-areca-settings @ONLY)
@@ -180,7 +180,7 @@ install(FILES "data/areca-settings.desktop"
         RENAME "io.github.areca.IBusSettings.desktop")
 
 # Quyền /dev/uinput cho backend Backspace/Shift-select phần cứng và quyền đọc
-# chuột cho areca-mouse-monitor.
+# chuột cho ibus-areca-mouse-monitor.
 install(FILES data/70-areca-pointer.rules data/99-uinput-areca.rules
         DESTINATION "lib/udev/rules.d")
 

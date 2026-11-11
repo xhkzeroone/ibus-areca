@@ -14,8 +14,8 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, Gio, Gtk
 
 ASSETS = Path(__file__).resolve().parent / "assets"
-ORIGINAL_ICON = Path(__file__).resolve().parent.parent / "icons/hicolor/scalable/apps/areca-settings.svg"
-APP_ID = "io.github.areca.Settings"
+ORIGINAL_ICON = Path(__file__).resolve().parent.parent / "icons/hicolor/scalable/apps/ibus-areca-settings.svg"
+APP_ID = "io.github.areca.IBusSettings"
 DEFAULT_TRAY_ICON = "ibus-areca"
 PRESETS = {
     "original": ("Areca gốc", ORIGINAL_ICON),
