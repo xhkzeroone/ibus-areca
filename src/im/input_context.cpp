@@ -12,10 +12,10 @@ std::string SurroundingText::selectedText() const {
   }
   const auto begin = std::min(cursor_, anchor_);
   const auto end = std::max(cursor_, anchor_);
-  const auto beginByte = ::areca::utf8::byteLength(text_, begin);
-  const auto endByte = ::areca::utf8::byteLength(text_, end);
-  if (beginByte == ::areca::utf8::kInvalid ||
-      endByte == ::areca::utf8::kInvalid) {
+  const auto beginByte = utf8::detail::byteLength(text_, begin);
+  const auto endByte = utf8::detail::byteLength(text_, end);
+  if (beginByte == utf8::detail::kInvalidLength ||
+      endByte == utf8::detail::kInvalidLength) {
     return {};
   }
   return text_.substr(beginByte, endByte - beginByte);
@@ -23,8 +23,9 @@ std::string SurroundingText::selectedText() const {
 
 void SurroundingText::setText(const std::string &text, unsigned int cursor,
                               unsigned int anchor) {
-  const auto length = ::areca::utf8::length(text);
-  if (length == ::areca::utf8::kInvalid || cursor > length || anchor > length) {
+  const auto length = utf8::detail::length(text);
+  if (length == utf8::detail::kInvalidLength || cursor > length ||
+      anchor > length) {
     invalidate();
     return;
   }
@@ -35,8 +36,9 @@ void SurroundingText::setText(const std::string &text, unsigned int cursor,
 }
 
 void SurroundingText::setCursor(unsigned int cursor, unsigned int anchor) {
-  const auto length = ::areca::utf8::length(text_);
-  if (length == ::areca::utf8::kInvalid || cursor > length || anchor > length) {
+  const auto length = utf8::detail::length(text_);
+  if (length == utf8::detail::kInvalidLength || cursor > length ||
+      anchor > length) {
     invalidate();
     return;
   }
@@ -52,12 +54,12 @@ void SurroundingText::deleteText(int offset, unsigned int size) {
   if (cursor_ != anchor_) {
     const auto begin = std::min(cursor_, anchor_);
     const auto end = std::max(cursor_, anchor_);
-    const auto beginByte = ::areca::utf8::byteLength(text_, begin);
-    const auto endByte = ::areca::utf8::byteLength(text_, end);
+    const auto beginByte = utf8::detail::byteLength(text_, begin);
+    const auto endByte = utf8::detail::byteLength(text_, end);
     text_.erase(beginByte, endByte - beginByte);
     cursor_ = anchor_ = begin;
   }
-  const auto length = static_cast<int64_t>(::areca::utf8::length(text_));
+  const auto length = static_cast<int64_t>(utf8::detail::length(text_));
   int64_t start = static_cast<int64_t>(cursor_) + offset;
   int64_t end = start + size;
   if (start < 0) {
@@ -70,9 +72,9 @@ void SurroundingText::deleteText(int offset, unsigned int size) {
     return;
   }
   const auto startByte =
-      ::areca::utf8::byteLength(text_, static_cast<std::size_t>(start));
+      utf8::detail::byteLength(text_, static_cast<std::size_t>(start));
   const auto endByte =
-      ::areca::utf8::byteLength(text_, static_cast<std::size_t>(end));
+      utf8::detail::byteLength(text_, static_cast<std::size_t>(end));
   text_.erase(startByte, endByte - startByte);
   if (static_cast<int64_t>(cursor_) > start) {
     cursor_ = static_cast<unsigned int>(start);
