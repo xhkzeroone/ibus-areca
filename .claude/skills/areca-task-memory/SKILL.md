@@ -59,6 +59,7 @@ Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và 
 | Cần tìm | Ở đâu |
 |---|---|
 | Quy tắc code, nơi đặt hàm mới | skill `areca-code` |
+| Quy tắc PR | skill `areca-pr`, `CONTRIBUTING.md` |
 | Lịch sử port, bảng đổi API sang IBus | skill `areca-ibus-port` |
 | Lớp tương thích (event loop, input context, key, config) | `src/im/` |
 | Engine IBus, property, lookup table, preedit | `src/ibus/` |

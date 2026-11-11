@@ -45,7 +45,8 @@ jobs:
             already checked out in the working directory.
 
             Before reviewing, read the project rules and judge the PR against them:
-            - README.md (section "Đóng góp")
+            - CONTRIBUTING.md (mandatory PR rules)
+            - .claude/skills/areca-pr/SKILL.md
             - .claude/skills/areca-code/SKILL.md (architecture, patterns)
 
             Focus on, in this order:
@@ -93,4 +94,4 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
             --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
-            --append-system-prompt "You review pull requests for ibus-areca. Read the Đóng góp section of README.md and .claude/skills/areca-code/SKILL.md first and judge the PR against them. Reply in Vietnamese. Do not modify files."
+            --append-system-prompt "You review pull requests for ibus-areca. Read CONTRIBUTING.md, .claude/skills/areca-pr/SKILL.md and .claude/skills/areca-code/SKILL.md first and judge the PR against them. Reply in Vietnamese. Do not modify files."

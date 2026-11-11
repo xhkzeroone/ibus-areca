@@ -417,10 +417,11 @@ vào `~/.local`. IBus và các bộ gõ khác không bị động tới.
 
 ## Đóng góp
 
-Mọi báo lỗi, ý tưởng và Pull Request đều được hoan nghênh. Trước khi gửi PR:
+Mọi báo lỗi, ý tưởng và Pull Request đều được hoan nghênh. Trước khi gửi PR,
+hãy đọc [CONTRIBUTING.md](CONTRIBUTING.md), đặc biệt mục quy tắc bắt buộc:
 
 - Mỗi PR chỉ giải quyết một vấn đề.
-- Format bằng `clang-format` theo `.clang-format` ở gốc repo.
+- Format bằng `git clang-format main`.
 - Build sạch, `ctest` qua toàn bộ, có test cho thay đổi.
 - Không chặn main loop của engine.
 - Gõ thử trên ứng dụng thật và ghi kết quả vào PR.
