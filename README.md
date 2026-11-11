@@ -74,6 +74,19 @@ trình duyệt, Electron, terminal và ứng dụng XWayland.
 ## Cài đặt nhanh
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/xhkzeroone/ibus-areca/main/install.sh | bash
+```
+
+Installer tải gói dựng sẵn từ release mới nhất cho Ubuntu, Linux Mint, Pop!_OS,
+Zorin OS, Arch Linux và các bản dựa trên Arch, Fedora, Nobara, Bazzite,
+openSUSE Tumbleweed; cấp quyền uinput nếu cần, thêm Areca vào danh sách bộ gõ
+của IBus (và nguồn nhập của GNOME) rồi khởi động lại IBus. Mọi thao tác cấp quyền
+và reboot đều hỏi xác nhận trước.
+
+Repo chưa có release hoặc bản phân phối chưa có gói dựng sẵn thì build từ mã
+nguồn:
+
+```bash
 git clone --recurse-submodules https://github.com/xhkzeroone/ibus-areca.git
 cd ibus-areca
 ./scripts/install.sh
