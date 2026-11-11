@@ -58,8 +58,7 @@ ApplyStatus SurroundingTextV2Backend::apply(im::InputContext &inputContext,
   onDone_ = std::move(onDone);
   remainingDeletes_ = plan.backspaceCount;
   totalDeletes_ = plan.backspaceCount;
-  const char *frontend = inputContext.frontend();
-  deleteDelayMs_ = resolveSurroundingDeleteDelayMs(frontend, plan);
+  deleteDelayMs_ = plan.surroundingDeleteDelayMs;
   afterDeleteWaitMs_ = plan.afterSurroundingDeleteWaitMs;
   timerAccuracyUsec_ = plan.timerAccuracyUsec;
   commitText_ = plan.commitText;
@@ -74,8 +73,7 @@ ApplyStatus SurroundingTextV2Backend::apply(im::InputContext &inputContext,
                  << " total_deletes=" << totalDeletes_
                  << " delete_delay_ms=" << deleteDelayMs_
                  << " after_wait_ms=" << afterDeleteWaitMs_
-                 << " verify_final_delete=" << isProbe_
-                 << " frontend=" << (frontend ? frontend : "");
+                 << " verify_final_delete=" << isProbe_;
   }
 
   beginIncrementalDelete();

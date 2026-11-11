@@ -28,8 +28,7 @@ ApplyStatus ForwardBackspaceBackend::apply(im::InputContext &inputContext,
   remainingBackspaces_ = plan.backspaceCount;
   sentBackspaces_ = 0;
   backspaceDelayMs_ = plan.backspaceDelayMs;
-  const char *frontend = inputContext.frontend();
-  afterBackspaceWaitMs_ = resolveAfterBackspaceWaitMs(frontend, plan);
+  afterBackspaceWaitMs_ = plan.afterBackspaceWaitMs;
   timerAccuracyUsec_ = plan.timerAccuracyUsec;
   commitText_ = plan.commitText;
 
@@ -40,7 +39,6 @@ ApplyStatus ForwardBackspaceBackend::apply(im::InputContext &inputContext,
                  << " after_wait_ms=" << afterBackspaceWaitMs_
                  << " adaptive_extra_ms="
                  << adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_)
-                 << " frontend=" << (frontend ? frontend : "")
                  << " accuracy_us=" << timerAccuracyUsec_;
   }
 

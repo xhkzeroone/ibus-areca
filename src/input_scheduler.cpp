@@ -19,9 +19,8 @@ InputScheduler::InputScheduler(im::EventLoop &eventLoop,
       debugProvider_(std::move(debugProvider)),
       rewriteBackendSelector_(std::move(rewriteBackendSelector)) {}
 
-void InputScheduler::enqueue(im::InputContext &inputContext,
-                             uint32_t codepoint, std::string utf8Text,
-                             bool suppressMacro) {
+void InputScheduler::enqueue(im::InputContext &inputContext, uint32_t codepoint,
+                             std::string utf8Text, bool suppressMacro) {
   QueuedKey key;
   key.sequence = nextSequence_++;
   key.codepoint = codepoint;
@@ -226,32 +225,15 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   plan.backspaceDelayMs = timing.backspaceDelayMs;
   plan.uinputBackspaceAckTimeoutMs = timing.uinputBackspaceAckTimeoutMs;
   plan.afterBackspaceWaitMs = timing.afterBackspaceWaitMs;
-  plan.waylandAfterBackspaceWaitMs = timing.waylandAfterBackspaceWaitMs;
-  plan.ximAfterBackspaceWaitMs = timing.ximAfterBackspaceWaitMs;
-  plan.dbusAfterBackspaceWaitMs = timing.dbusAfterBackspaceWaitMs;
-  plan.ibusAfterBackspaceWaitMs = timing.ibusAfterBackspaceWaitMs;
   plan.uinputShiftSelectDelayMs = timing.uinputShiftSelectDelayMs;
   plan.uinputShiftSelectAckTimeoutMs = timing.uinputShiftSelectAckTimeoutMs;
   plan.afterUinputShiftSelectWaitMs = timing.afterUinputShiftSelectWaitMs;
-  plan.waylandAfterUinputShiftSelectWaitMs =
-      timing.waylandAfterUinputShiftSelectWaitMs;
-  plan.ximAfterUinputShiftSelectWaitMs = timing.ximAfterUinputShiftSelectWaitMs;
-  plan.dbusAfterUinputShiftSelectWaitMs =
-      timing.dbusAfterUinputShiftSelectWaitMs;
-  plan.ibusAfterUinputShiftSelectWaitMs =
-      timing.ibusAfterUinputShiftSelectWaitMs;
   plan.surroundingWaitMs = timing.surroundingWaitMs;
   plan.surroundingProbeTimeoutMs = timing.surroundingProbeTimeoutMs;
   plan.surroundingDeleteDelayMs = timing.surroundingDeleteDelayMs;
-  plan.waylandSurroundingDeleteDelayMs = timing.waylandSurroundingDeleteDelayMs;
   plan.afterSurroundingDeleteWaitMs = timing.afterSurroundingDeleteWaitMs;
   plan.xtestBackspaceDelayMs = timing.xtestBackspaceDelayMs;
   plan.afterXTestBackspaceWaitMs = timing.afterXTestBackspaceWaitMs;
-  plan.waylandAfterXTestBackspaceWaitMs =
-      timing.waylandAfterXTestBackspaceWaitMs;
-  plan.ximAfterXTestBackspaceWaitMs = timing.ximAfterXTestBackspaceWaitMs;
-  plan.dbusAfterXTestBackspaceWaitMs = timing.dbusAfterXTestBackspaceWaitMs;
-  plan.ibusAfterXTestBackspaceWaitMs = timing.ibusAfterXTestBackspaceWaitMs;
   plan.timerAccuracyUsec = timing.timerAccuracyUsec;
   plan.commitText = result.commitText;
 

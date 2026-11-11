@@ -17,30 +17,17 @@ struct SchedulerTiming {
   uint32_t backspaceDelayMs = 1;
   uint32_t uinputBackspaceAckTimeoutMs = 150;
   uint32_t afterBackspaceWaitMs = 10;
-  uint32_t waylandAfterBackspaceWaitMs = 10;
-  uint32_t ximAfterBackspaceWaitMs = 10;
-  uint32_t dbusAfterBackspaceWaitMs = 10;
-  uint32_t ibusAfterBackspaceWaitMs = 10;
 
   uint32_t uinputShiftSelectDelayMs = 1;
   uint32_t uinputShiftSelectAckTimeoutMs = 150;
   uint32_t afterUinputShiftSelectWaitMs = 10;
-  uint32_t waylandAfterUinputShiftSelectWaitMs = 5;
-  uint32_t ximAfterUinputShiftSelectWaitMs = 10;
-  uint32_t dbusAfterUinputShiftSelectWaitMs = 10;
-  uint32_t ibusAfterUinputShiftSelectWaitMs = 10;
 
   uint32_t surroundingWaitMs = 3;
   uint32_t surroundingProbeTimeoutMs = 80;
   uint32_t surroundingDeleteDelayMs = 10;
-  uint32_t waylandSurroundingDeleteDelayMs = 0;
   uint32_t afterSurroundingDeleteWaitMs = 1;
   uint32_t xtestBackspaceDelayMs = 1;
   uint32_t afterXTestBackspaceWaitMs = 10;
-  uint32_t waylandAfterXTestBackspaceWaitMs = 10;
-  uint32_t ximAfterXTestBackspaceWaitMs = 10;
-  uint32_t dbusAfterXTestBackspaceWaitMs = 10;
-  uint32_t ibusAfterXTestBackspaceWaitMs = 10;
   uint32_t postCommitDelayMs = 20;
   uint64_t timerAccuracyUsec = 1;
 };
@@ -56,8 +43,7 @@ struct RewriteBackendSelection {
 
 class InputScheduler {
 public:
-  using EngineResolver =
-      std::function<VietnameseEngine *(im::InputContext &)>;
+  using EngineResolver = std::function<VietnameseEngine *(im::InputContext &)>;
   using TimingProvider = std::function<SchedulerTiming(im::InputContext &)>;
   using DebugProvider = std::function<bool()>;
   using RewriteBackendSelector = std::function<RewriteBackendSelection(

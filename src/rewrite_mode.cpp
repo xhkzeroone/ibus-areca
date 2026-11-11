@@ -39,13 +39,10 @@ im::KeySym normalizeRewriteKeypadSym(im::KeySym sym) {
 
 bool hasRewriteShortcutModifier(const im::Key &key) {
   const auto states = key.states();
-  return states.test(im::KeyState::Ctrl) ||
-         states.test(im::KeyState::Alt) ||
-         states.test(im::KeyState::Super) ||
-         states.test(im::KeyState::Meta) ||
+  return states.test(im::KeyState::Ctrl) || states.test(im::KeyState::Alt) ||
+         states.test(im::KeyState::Super) || states.test(im::KeyState::Meta) ||
          states.test(im::KeyState::Hyper) ||
-         states.test(im::KeyState::Super2) ||
-         states.test(im::KeyState::Hyper2);
+         states.test(im::KeyState::Super2) || states.test(im::KeyState::Hyper2);
 }
 
 bool isSelectAllShortcut(const im::Key &rawKey) {
@@ -165,8 +162,7 @@ void RewriteModeHandler::tryRestoreFromSurroundingText(
       state.engine->currentText().empty() && !scheduler_.rewritePending() &&
       scheduler_.queuedKeyCount() == 0 && !scheduler_.shouldRejectReset() &&
       !inputContext.capabilityFlags().test(im::CapabilityFlag::Password) &&
-      inputContext.capabilityFlags().test(
-          im::CapabilityFlag::SurroundingText);
+      inputContext.capabilityFlags().test(im::CapabilityFlag::SurroundingText);
   if (!supported) {
     if (debugProvider_() && enabled) {
       ARECA_INFO() << "areca: surrounding restore rejected"
@@ -256,24 +252,20 @@ bool RewriteModeHandler::shouldRecoverBackspace(
   const auto queuedKeys = scheduler_.queuedKeyCount();
   if (currentText.empty() && queuedKeys == 0) {
     if (debugProvider_()) {
-      const char *frontend = inputContext.frontend();
       ARECA_INFO() << "areca: backspace route=forward"
                    << " reason=no-composition"
                    << " queue=" << queuedKeys
-                   << " program=" << inputContext.program()
-                   << " frontend=" << (frontend ? frontend : "");
+                   << " program=" << inputContext.program();
     }
     return false;
   }
   const bool capture = backspaceRecoveryProvider_();
   if (debugProvider_()) {
-    const char *frontend = inputContext.frontend();
     ARECA_INFO() << "areca: backspace route="
                  << (capture ? "recovery" : "forward") << " reason="
                  << (capture ? "composition-active" : "gate-disabled")
                  << " current=" << currentText << " queue=" << queuedKeys
-                 << " program=" << inputContext.program()
-                 << " frontend=" << (frontend ? frontend : "");
+                 << " program=" << inputContext.program();
   }
   return capture;
 }
@@ -283,14 +275,10 @@ void RewriteModeHandler::deferBackspaceRecoveryUntilRelease(
   state.backspaceRecoveryAwaitingRelease = true;
   if (debugProvider_()) {
     auto *inputContext = event.inputContext();
-    const char *frontend = inputContext && inputContext->frontend()
-                               ? inputContext->frontend()
-                               : "";
     ARECA_INFO() << "areca: backspace recovery deferred until release"
                  << " current=" << state.engine->currentText()
-                 << " queue=" << scheduler_.queuedKeyCount()
-                 << " program=" << (inputContext ? inputContext->program() : "")
-                 << " frontend=" << frontend;
+                 << " queue=" << scheduler_.queuedKeyCount() << " program="
+                 << (inputContext ? inputContext->program() : "");
   }
   event.filterAndAccept();
 }
@@ -300,12 +288,10 @@ void RewriteModeHandler::runDeferredBackspaceRecovery(
     RewriteInputState &state) {
   state.backspaceRecoveryAwaitingRelease = false;
   if (debugProvider_()) {
-    const char *frontend = inputContext.frontend();
     ARECA_INFO() << "areca: backspace recovery resumed after release"
                  << " current=" << state.engine->currentText()
                  << " queue=" << scheduler_.queuedKeyCount()
-                 << " program=" << inputContext.program()
-                 << " frontend=" << (frontend ? frontend : "");
+                 << " program=" << inputContext.program();
   }
   event.filterAndAccept();
   scheduler_.enqueueBackspace(inputContext);
@@ -326,8 +312,8 @@ void RewriteModeHandler::handleKeyEvent(im::KeyEvent &event) {
   const bool isBackspace =
       key.check(im::Key_BackSpace) || rawKey.check(im::Key_BackSpace);
   const auto textSym = normalizeRewriteKeypadSym(normalizedKey.sym());
-  const bool isEnter = textSym == im::Key_Return ||
-                       rawSym == im::Key_Return || rawSym == im::Key_KP_Enter;
+  const bool isEnter = textSym == im::Key_Return || rawSym == im::Key_Return ||
+                       rawSym == im::Key_KP_Enter;
 
   if (debugProvider_() && (!event.isRelease() || isBackspace || isEnter)) {
     ARECA_INFO() << "areca: rewrite handler key=" << key.toString()
@@ -383,9 +369,8 @@ void RewriteModeHandler::handleKeyEvent(im::KeyEvent &event) {
   }
 
   const bool resetAndForward =
-      key.isCursorMove() || rawSym == im::Key_Tab ||
-      rawSym == im::Key_KP_Tab || rawSym == im::Key_ISO_Left_Tab ||
-      rawSym == im::Key_Escape ||
+      key.isCursorMove() || rawSym == im::Key_Tab || rawSym == im::Key_KP_Tab ||
+      rawSym == im::Key_ISO_Left_Tab || rawSym == im::Key_Escape ||
       (!suppressMacro && hasRewriteShortcutModifier(rawKey));
   if (resetAndForward) {
     if (scheduler_.shouldRejectReset()) {
@@ -438,33 +423,16 @@ void RewriteModeHandler::handleKeyEvent(im::KeyEvent &event) {
     if (state->backspaceRecoveryAwaitingRelease) {
       // IBus có thể gửi press lặp mà không có cờ Repeat. Press tiếp theo
       // trước release là nhấn giữ; phím inject đã được loại ở các guard trên.
-      const char *frontend = inputContext->frontend();
-      const bool ibusHeldPress =
-          frontend && std::string_view(frontend) == "ibus";
-      if (isRepeat || ibusHeldPress) {
-        if (debugProvider_()) {
-          ARECA_INFO() << "areca: backspace route=forward"
-                       << " reason=repeat-reset-composition"
-                       << " repeat=" << isRepeat
-                       << " inferred_ibus_repeat=" << ibusHeldPress
-                       << " program=" << inputContext->program();
-        }
-        resetContext(*inputContext);
-        state->forwardedBackspacePresses.emplace(event.time(),
-                                                 event.rawKey().code());
-        event.forward();
-        return;
-      }
       if (debugProvider_()) {
-        const char *frontend = inputContext->frontend();
-        ARECA_INFO() << "areca: backspace route=recovery"
-                     << " reason=awaiting-release"
-                     << " current=" << state->engine->currentText()
-                     << " queue=" << scheduler_.queuedKeyCount()
-                     << " program=" << inputContext->program()
-                     << " frontend=" << (frontend ? frontend : "");
+        ARECA_INFO() << "areca: backspace route=forward"
+                     << " reason=repeat-reset-composition"
+                     << " repeat=" << isRepeat
+                     << " program=" << inputContext->program();
       }
-      event.filterAndAccept();
+      resetContext(*inputContext);
+      state->forwardedBackspacePresses.emplace(event.time(),
+                                               event.rawKey().code());
+      event.forward();
       return;
     }
     if (state->engine && state->engine->canUndoMacro()) {
@@ -539,8 +507,7 @@ void RewriteModeHandler::handleKeyEvent(im::KeyEvent &event) {
   scheduler_.enqueue(*inputContext, codepoint, utf8Text, suppressMacro);
 }
 
-void RewriteModeHandler::requestProtectedReset(
-    im::InputContext &inputContext) {
+void RewriteModeHandler::requestProtectedReset(im::InputContext &inputContext) {
   // Bắt đầu: Giữ snapshot Bamboo qua reset/deactivate của Edge X11
   if (auto *state = stateFor(inputContext);
       state && im::now(CLOCK_MONOTONIC) <= state->resetProtectedUntilUsec) {

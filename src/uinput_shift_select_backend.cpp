@@ -50,8 +50,7 @@ ApplyStatus UinputShiftSelectBackend::apply(im::InputContext &inputContext,
   awaitingShiftUpAck_ = false;
   shiftSelectDelayMs_ = plan.uinputShiftSelectDelayMs;
   ackTimeoutMs_ = plan.uinputShiftSelectAckTimeoutMs;
-  const char *frontend = inputContext.frontend();
-  afterSelectWaitMs_ = resolveAfterUinputShiftSelectWaitMs(frontend, plan);
+  afterSelectWaitMs_ = plan.afterUinputShiftSelectWaitMs;
   timerAccuracyUsec_ = plan.timerAccuracyUsec;
   commitText_ = plan.commitText;
 
@@ -61,7 +60,6 @@ ApplyStatus UinputShiftSelectBackend::apply(im::InputContext &inputContext,
                  << " emit_left=" << selectionCount_
                  << " delay_ms=" << shiftSelectDelayMs_
                  << " after_wait_ms=" << afterSelectWaitMs_
-                 << " frontend=" << (frontend ? frontend : "")
                  << " accuracy_us=" << timerAccuracyUsec_;
   }
 

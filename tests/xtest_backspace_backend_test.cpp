@@ -20,7 +20,6 @@ public:
       : areca::im::InputContext(manager, "xterm"), events_(events) {}
   ~DummyInputContext() override { destroy(); }
 
-  const char *frontend() const override { return "wayland"; }
   void commitStringImpl(const std::string &text) override {
     events_.push_back("commit:" + text);
     committedText += text;
@@ -67,9 +66,6 @@ areca::RewritePlan makePlan(uint64_t transactionId, uint32_t backspaceCount,
   plan.backspaceCount = backspaceCount;
   plan.xtestBackspaceDelayMs = 0;
   plan.afterXTestBackspaceWaitMs = 0;
-  plan.waylandAfterXTestBackspaceWaitMs = 0;
-  plan.ximAfterXTestBackspaceWaitMs = 0;
-  plan.dbusAfterXTestBackspaceWaitMs = 0;
   plan.commitText = std::move(commitText);
   return plan;
 }

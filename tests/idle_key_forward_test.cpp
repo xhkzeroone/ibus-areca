@@ -16,8 +16,6 @@ public:
       : areca::im::InputContext(manager, "google-chrome") {}
   ~TestInputContext() override { destroy(); }
 
-  const char *frontend() const override { return "wayland"; }
-
   void commitStringImpl(const std::string &text) override {
     events.push_back("commit:" + text);
     commitTimesUsec.push_back(areca::im::now(CLOCK_MONOTONIC));
@@ -115,7 +113,8 @@ int main() {
   // Observer nhận đúng phần text ứng dụng vừa đổi do Areca để mode handler
   // biết chắc text trước con trỏ.
   std::vector<std::string> observed;
-  scheduler.setCommitObserver([&](areca::im::InputContext &, uint32_t deleteCount,
+  scheduler.setCommitObserver([&](areca::im::InputContext &,
+                                  uint32_t deleteCount,
                                   const std::string &text) {
     observed.push_back(std::to_string(deleteCount) + ":" + text);
   });
@@ -135,7 +134,8 @@ int main() {
 
   engine.reset();
   // Engine đổi đầu ra thì phải chặn phím gốc và commit đúng một lần.
-  areca::im::KeyEvent transformed(&inputContext, areca::im::Key(areca::im::Key_x));
+  areca::im::KeyEvent transformed(&inputContext,
+                                  areca::im::Key(areca::im::Key_x));
   assert(scheduler.handleIdleKey(transformed, 'x', "x"));
   assert(transformed.accepted());
   assert(inputContext.events == std::vector<std::string>{"commit:X"});
@@ -182,11 +182,13 @@ int main() {
       });
 
   const uint64_t forwardStartUsec = areca::im::now(CLOCK_MONOTONIC);
-  areca::im::KeyEvent barrierFirst(&barrierInputContext, areca::im::Key(areca::im::Key_a));
+  areca::im::KeyEvent barrierFirst(&barrierInputContext,
+                                   areca::im::Key(areca::im::Key_a));
   assert(barrierScheduler.handleIdleKey(barrierFirst, 'a', "a"));
   assert(!barrierFirst.accepted());
 
-  areca::im::KeyEvent barrierSecond(&barrierInputContext, areca::im::Key(areca::im::Key_s));
+  areca::im::KeyEvent barrierSecond(&barrierInputContext,
+                                    areca::im::Key(areca::im::Key_s));
   assert(!barrierScheduler.handleIdleKey(barrierSecond, 's', "s"));
   barrierScheduler.enqueue(barrierInputContext, 's', "s");
   assert(barrierScheduler.queuedKeyCount() == 1);

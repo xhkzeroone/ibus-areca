@@ -48,8 +48,7 @@ ApplyStatus UinputBackspaceBackend::apply(im::InputContext &inputContext,
   backspaceAckTimedOut_ = deletedCharacters_ == 0;
   backspaceDelayMs_ = plan.backspaceDelayMs;
   ackTimeoutMs_ = plan.uinputBackspaceAckTimeoutMs;
-  const char *frontend = inputContext.frontend();
-  afterBackspaceWaitMs_ = resolveAfterBackspaceWaitMs(frontend, plan);
+  afterBackspaceWaitMs_ = plan.afterBackspaceWaitMs;
   timerAccuracyUsec_ = plan.timerAccuracyUsec;
   commitText_ = plan.commitText;
 
@@ -61,7 +60,6 @@ ApplyStatus UinputBackspaceBackend::apply(im::InputContext &inputContext,
                  << " after_wait_ms=" << afterBackspaceWaitMs_
                  << " adaptive_extra_ms="
                  << adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_)
-                 << " frontend=" << (frontend ? frontend : "")
                  << " accuracy_us=" << timerAccuracyUsec_;
   }
 
@@ -150,8 +148,7 @@ bool UinputBackspaceBackend::handleBackspace(im::KeyEvent &event) {
   if (!commitWaitStarted_ && !backspaceAckTimedOut_ &&
       backspacesSeen_ == deletedCharacters_) {
     if (ackSentAtUsec_ > 0) {
-      const uint64_t roundtripUsec =
-          im::now(CLOCK_MONOTONIC) - ackSentAtUsec_;
+      const uint64_t roundtripUsec = im::now(CLOCK_MONOTONIC) - ackSentAtUsec_;
       ackSentAtUsec_ = 0;
       adaptiveWait_.observeAckRoundtrip(roundtripUsec);
     }

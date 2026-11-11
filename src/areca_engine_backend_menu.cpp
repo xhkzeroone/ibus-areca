@@ -70,8 +70,7 @@ void ArecaEngine::showBackendSelectionMenu(im::InputContext &inputContext) {
   candList->setLabels({"1. ", "2. ", "3. ", "4. ", "A. ", "E. "});
   candList->setPageSize(6);
 
-  const char *frontend = inputContext.frontend();
-  const bool isTerminal = inputTypeDetector_.isTerminal(appName, frontend);
+  const bool isTerminal = inputTypeDetector_.isTerminal(appName);
   const bool canForward =
       inputTypeDetector_.canForwardBackspaces(inputContext, appName);
   const bool preferHardware = isTerminal || !canForward;
@@ -146,13 +145,9 @@ void ArecaEngine::selectBackendForApp(im::InputContext &inputContext,
 
   if (it != overrides.end()) {
     it->mode.setValue(mode);
-    const char *frontend = inputContext.frontend();
-    it->frontend.setValue(frontend ? frontend : "");
   } else {
     AppBackendOverrideEntry entry;
     entry.appName.setValue(appName);
-    const char *frontend = inputContext.frontend();
-    entry.frontend.setValue(frontend ? frontend : "");
     entry.mode.setValue(mode);
     overrides.push_back(std::move(entry));
   }
@@ -171,8 +166,7 @@ void ArecaEngine::selectBackendForApp(im::InputContext &inputContext,
   inputContext.updateUserInterface(im::UserInterfaceComponent::InputPanel,
                                    true);
 
-  const char *frontend = inputContext.frontend();
-  const bool isTerminal = inputTypeDetector_.isTerminal(appName, frontend);
+  const bool isTerminal = inputTypeDetector_.isTerminal(appName);
   const bool canForward =
       inputTypeDetector_.canForwardBackspaces(inputContext, appName);
   const bool preferHardware = isTerminal || !canForward;

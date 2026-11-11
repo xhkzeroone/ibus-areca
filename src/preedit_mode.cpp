@@ -44,13 +44,10 @@ im::KeySym normalizePreeditKeypadSym(im::KeySym sym) {
 
 bool hasPreeditShortcutModifier(const im::Key &key) {
   const auto states = key.states();
-  return states.test(im::KeyState::Ctrl) ||
-         states.test(im::KeyState::Alt) ||
-         states.test(im::KeyState::Super) ||
-         states.test(im::KeyState::Meta) ||
+  return states.test(im::KeyState::Ctrl) || states.test(im::KeyState::Alt) ||
+         states.test(im::KeyState::Super) || states.test(im::KeyState::Meta) ||
          states.test(im::KeyState::Hyper) ||
-         states.test(im::KeyState::Super2) ||
-         states.test(im::KeyState::Hyper2);
+         states.test(im::KeyState::Super2) || states.test(im::KeyState::Hyper2);
 }
 
 // Phím không bị filter được ứng dụng tự xử lý (chèn, xoá, di chuyển) nên Areca
@@ -198,8 +195,8 @@ void PreeditModeHandler::handleKeyEvent(im::KeyEvent &event) {
   const auto textSym = normalizePreeditKeypadSym(normalizedKey.sym());
   const bool suppressMacro = !state->engine->currentText().empty() &&
                              macroBypassMatcher_(normalizedKey);
-  const bool isEnter = textSym == im::Key_Return ||
-                       rawSym == im::Key_Return || rawSym == im::Key_KP_Enter;
+  const bool isEnter = textSym == im::Key_Return || rawSym == im::Key_Return ||
+                       rawSym == im::Key_KP_Enter;
 
   // Modified and unsupported keys are not rebuilt. Commit the current Bamboo
   // preedit, then let Fcitx forward the original event with its exact modifier
@@ -213,18 +210,14 @@ void PreeditModeHandler::handleKeyEvent(im::KeyEvent &event) {
 
   if (isBackspace) {
     // IBus có thể gửi press lặp không có Repeat khi đang chờ khôi phục từ.
-    const char *frontend = inputContext->frontend();
-    const bool ibusHeldPress =
-        state->finalizedWordRecovery ==
-            FinalizedWordRecoveryState::AwaitingBackspaceRelease &&
-        frontend && std::string_view(frontend) == "ibus";
+    const bool heldPress = state->finalizedWordRecovery ==
+                           FinalizedWordRecoveryState::AwaitingBackspaceRelease;
     state->sentenceCapitalization.reset();
-    if (isRepeat || ibusHeldPress) {
+    if (isRepeat || heldPress) {
       if (debugProvider_()) {
         ARECA_INFO() << "areca: preedit backspace route=forward"
                      << " reason=repeat-reset-composition"
-                     << " repeat=" << isRepeat
-                     << " inferred_ibus_repeat=" << ibusHeldPress;
+                     << " repeat=" << isRepeat << " held_press=" << heldPress;
       }
       // Giữ nguyên phần chữ người dùng đang thấy, nhưng bỏ toàn bộ trạng thái
       // Bamboo để chuỗi Backspace repeat tiếp tục xóa trực tiếp trong app.
@@ -483,8 +476,7 @@ bool PreeditModeHandler::tryRestoreFromSurroundingText(
       state.engine && state.composing.empty() &&
       state.engine->currentText().empty() &&
       !inputContext.capabilityFlags().test(im::CapabilityFlag::Password) &&
-      inputContext.capabilityFlags().test(
-          im::CapabilityFlag::SurroundingText);
+      inputContext.capabilityFlags().test(im::CapabilityFlag::SurroundingText);
   if (!supported) {
     return false;
   }
@@ -573,8 +565,7 @@ void PreeditModeHandler::commitComposition(im::InputContext &inputContext,
   updatePreedit(inputContext, state);
 }
 
-void PreeditModeHandler::requestProtectedReset(
-    im::InputContext &inputContext) {
+void PreeditModeHandler::requestProtectedReset(im::InputContext &inputContext) {
   auto *state = stateFor(inputContext);
   // Bắt đầu: Giữ finalized-word recovery qua lifecycle giả của Edge X11
   if (state &&

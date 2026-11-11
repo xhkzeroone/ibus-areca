@@ -217,9 +217,6 @@ public:
   InputContext(const InputContext &) = delete;
   InputContext &operator=(const InputContext &) = delete;
 
-  // "ibus", "xim" hoặc "wayland" tuỳ đường client nối vào IBus.
-  virtual const char *frontend() const = 0;
-
   const std::string &program() const { return program_; }
   void setProgram(std::string program) { program_ = std::move(program); }
   const ICUUID &uuid() const { return uuid_; }

@@ -16,8 +16,6 @@ public:
       : areca::im::InputContext(manager, "probe-test"), events_(events) {}
   ~TestInputContext() override { destroy(); }
 
-  const char *frontend() const override { return "dbus"; }
-
   void commitStringImpl(const std::string &text) override {
     events_.push_back("commit:" + text);
   }

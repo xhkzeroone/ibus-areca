@@ -48,20 +48,14 @@ struct WindowFocusTrackerTestAccess {
 class TestInputContext : public areca::im::InputContext {
 public:
   TestInputContext(areca::im::InputContextManager &manager,
-                   const std::string &program, const char *frontendName = "x11")
-      : areca::im::InputContext(manager, program), frontend_(frontendName) {}
+                   const std::string &program)
+      : areca::im::InputContext(manager, program) {}
   ~TestInputContext() override { destroy(); }
-
-  const char *frontend() const override { return frontend_; }
-  void setFrontend(const char *frontendName) { frontend_ = frontendName; }
 
   void commitStringImpl(const std::string &) override {}
   void deleteSurroundingTextImpl(int, unsigned int) override {}
   void forwardKeyImpl(const areca::im::ForwardKeyEvent &) override {}
   void updatePreeditImpl() override {}
-
-private:
-  const char *frontend_ = "x11";
 };
 
 int main() {
@@ -73,20 +67,15 @@ int main() {
     InputTypeDetector detector(nullptr);
 
     // Terminal by program name
-    assert(detector.isTerminal("ghostty", nullptr));
-    assert(detector.isTerminal("com.mitchellh.ghostty", "wayland"));
-    assert(detector.isTerminal("mate-terminal", "xim"));
+    assert(detector.isTerminal("ghostty"));
+    assert(detector.isTerminal("com.mitchellh.ghostty"));
+    assert(detector.isTerminal("mate-terminal"));
 
     // Not a terminal program
-    assert(!detector.isTerminal("firefox", nullptr));
-    assert(!detector.isTerminal("code", "wayland"));
-    assert(!detector.isTerminal("", nullptr));
-    assert(!detector.isTerminal("", "wayland"));
-
-    // Nameless dbus frontend fallback
-    assert(detector.isTerminal("", "dbus"));
-    assert(detector.isTerminal("", "dbusfrontend"));
-    assert(!detector.isTerminal("firefox", "dbus"));
+    assert(!detector.isTerminal("firefox"));
+    assert(!detector.isTerminal("code"));
+    assert(!detector.isTerminal(""));
+    assert(!detector.isTerminal(""));
 
     // Browser checks with null tracker
     assert(detector.isBrowser("google-chrome"));
@@ -124,12 +113,11 @@ int main() {
     assert(detector.isBrowser(""));
 
     // Terminal checks with inactive tracker
-    assert(!detector.isTerminal("firefox", nullptr));
-    assert(!detector.isTerminal("code", nullptr));
-    assert(detector.isTerminal("ghostty", nullptr));
-    assert(detector.isTerminal("gnome-terminal-server", nullptr));
-    assert(detector.isTerminal("", "dbus"));
-    assert(!detector.isTerminal("", "wayland"));
+    assert(!detector.isTerminal("firefox"));
+    assert(!detector.isTerminal("code"));
+    assert(detector.isTerminal("ghostty"));
+    assert(detector.isTerminal("gnome-terminal-server"));
+    assert(!detector.isTerminal(""));
   }
 
   // Case 3: Setter wiring
@@ -145,7 +133,7 @@ int main() {
   // Chromium variants can add prefixes or suffixes to the omnibox class.
   {
     areca::im::InputContextManager manager;
-    TestInputContext edge(manager, "microsoft-edge", "dbus");
+    TestInputContext edge(manager, "microsoft-edge");
     edge.setCapabilityFlags(areca::im::CapabilityFlag::Url);
     InputTypeDetector detector;
     // Url is authoritative and does not depend on AT-SPI availability.
@@ -219,14 +207,14 @@ int main() {
         tracker, ":1.20", "/terminal", "ghostty", true);
     InputTypeDetector detector(&tracker);
 
-    assert(detector.isTerminal("", "wayland"));
-    assert(!detector.isTerminal("firefox", "wayland"));
+    assert(detector.isTerminal(""));
+    assert(!detector.isTerminal("firefox"));
 
     // Different VS Code executable and desktop IDs still refer to the same
     // app whose embedded terminal owns the AT-SPI focus.
     areca::WindowFocusTrackerTestAccess::seedFocus(tracker, ":1.20",
                                                    "/terminal", "code", true);
-    assert(detector.isTerminal("visual-studio-code", "wayland"));
+    assert(detector.isTerminal("visual-studio-code"));
 
     // A delayed blur for the old node must not clear a newer focus.
     areca::WindowFocusTrackerTestAccess::seedFocus(
@@ -255,65 +243,40 @@ int main() {
 
     // Wayland and XIM always forward
     {
-      TestInputContext ic(manager, "app", "wayland");
+      TestInputContext ic(manager, "app");
       assert(detector.canForwardBackspaces(ic));
     }
     {
-      TestInputContext ic(manager, "app", "wayland_v2");
+      TestInputContext ic(manager, "app");
       assert(detector.canForwardBackspaces(ic));
     }
     {
-      TestInputContext ic(manager, "app", "xim");
+      TestInputContext ic(manager, "app");
       assert(detector.canForwardBackspaces(ic));
     }
 
     // SDL clients never forward backspaces
     {
-      TestInputContext ic(manager, "SDL_Game", "dbus");
+      TestInputContext ic(manager, "SDL_Game");
       ic.setCapabilityFlags(areca::im::CapabilityFlag::KeyEventOrderFix);
       assert(!detector.canForwardBackspaces(ic));
     }
     {
-      TestInputContext ic(manager, "sdl2-game", "wayland");
+      TestInputContext ic(manager, "sdl2-game");
       assert(!detector.canForwardBackspaces(ic));
     }
     {
-      TestInputContext ic(manager, "/usr/bin/SDL_Game", "xim");
+      TestInputContext ic(manager, "/usr/bin/SDL_Game");
       assert(!detector.canForwardBackspaces(ic));
     }
     {
-      TestInputContext ic(manager, "SDL3_App.desktop", "ibus");
+      TestInputContext ic(manager, "SDL3_App.desktop");
       assert(!detector.canForwardBackspaces(ic));
     }
 
-    // Frontend aliases use the same policy as their base frontend.
+    // Ứng dụng thường nhận được Backspace mà IBus forward.
     {
-      TestInputContext ic(manager, "app", "waylandfrontend");
-      assert(detector.canForwardBackspaces(ic));
-    }
-    {
-      TestInputContext ic(manager, "app", "dbusfrontend");
-      ic.setCapabilityFlags(areca::im::CapabilityFlag::KeyEventOrderFix);
-      assert(detector.canForwardBackspaces(ic));
-    }
-
-    // D-Bus without KeyEventOrderFix and without SurroundingText -> false
-    {
-      TestInputContext ic(manager, "game", "dbus");
-      assert(!detector.canForwardBackspaces(ic));
-    }
-
-    // D-Bus with KeyEventOrderFix -> true
-    {
-      TestInputContext ic(manager, "app", "dbus");
-      ic.setCapabilityFlags(areca::im::CapabilityFlag::KeyEventOrderFix);
-      assert(detector.canForwardBackspaces(ic));
-    }
-
-    // D-Bus with SurroundingText -> true
-    {
-      TestInputContext ic(manager, "app", "dbus");
-      ic.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
+      TestInputContext ic(manager, "app");
       assert(detector.canForwardBackspaces(ic));
     }
   }

@@ -132,41 +132,18 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &) {
       static_cast<uint32_t>(
           advancedConfig_.uinputBackspaceAckTimeoutMs.value()),
       static_cast<uint32_t>(advancedConfig_.afterBackspaceWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.waylandAfterBackspaceWaitMs.value()),
-      static_cast<uint32_t>(advancedConfig_.ximAfterBackspaceWaitMs.value()),
-      static_cast<uint32_t>(advancedConfig_.dbusAfterBackspaceWaitMs.value()),
-      static_cast<uint32_t>(advancedConfig_.ibusAfterBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.uinputShiftSelectDelayMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.uinputShiftSelectAckTimeoutMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.afterUinputShiftSelectWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.waylandAfterUinputShiftSelectWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.ximAfterUinputShiftSelectWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.dbusAfterUinputShiftSelectWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.ibusAfterUinputShiftSelectWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.surroundingWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.surroundingProbeTimeoutMs.value()),
       static_cast<uint32_t>(advancedConfig_.surroundingDeleteDelayMs.value()),
       static_cast<uint32_t>(
-          advancedConfig_.waylandSurroundingDeleteDelayMs.value()),
-      static_cast<uint32_t>(
           advancedConfig_.afterSurroundingDeleteWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.xtestBackspaceDelayMs.value()),
       static_cast<uint32_t>(advancedConfig_.afterXTestBackspaceWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.waylandAfterXTestBackspaceWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.ximAfterXTestBackspaceWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.dbusAfterXTestBackspaceWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.ibusAfterXTestBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.postCommitDelayMs.value()),
       advancedConfig_.preciseTiming.value() ? 1U : 0U};
 }

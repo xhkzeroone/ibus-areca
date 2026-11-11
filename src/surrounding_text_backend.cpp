@@ -79,11 +79,9 @@ ApplyStatus SurroundingTextBackend::apply(im::InputContext &inputContext,
   }
 
   if (debugProvider_()) {
-    const char *frontend = inputContext.frontend();
     ARECA_INFO() << "areca: surrounding-text start tx=" << transactionId_
                  << " delete=" << plan.backspaceCount << " wait_ms=" << waitMs_
-                 << " probe=" << isProbe_
-                 << " frontend=" << (frontend ? frontend : "");
+                 << " probe=" << isProbe_;
   }
 
   // A synchronous update may already have confirmed the probe and scheduled

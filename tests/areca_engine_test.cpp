@@ -21,8 +21,6 @@ public:
   explicit FakeContext(std::string program)
       : InputContext(std::move(program)) {}
 
-  const char *frontend() const override { return "ibus"; }
-
   std::string text;
   std::vector<std::string> events;
 

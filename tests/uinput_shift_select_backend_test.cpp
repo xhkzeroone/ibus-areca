@@ -33,7 +33,6 @@ public:
   explicit Context(areca::im::InputContextManager &manager)
       : InputContext(manager, "shift-select-test") {}
   ~Context() override { destroy(); }
-  const char *frontend() const override { return "ibus"; }
   void commitStringImpl(const std::string &text) override {
     commits += text;
     commitTime = areca::im::now(CLOCK_MONOTONIC);
@@ -87,7 +86,7 @@ void run(bool deliverAck, uint32_t count) {
   plan.backspaceCount = count;
   plan.uinputShiftSelectDelayMs = 2;
   plan.uinputShiftSelectAckTimeoutMs = 40;
-  plan.ibusAfterUinputShiftSelectWaitMs = 10;
+  plan.afterUinputShiftSelectWaitMs = 10;
   plan.commitText = "x";
   int done = 0;
   assert(backend.apply(context, plan,
@@ -99,12 +98,12 @@ void run(bool deliverAck, uint32_t count) {
   // Shift release trước khi phát Shift up không được coi là ACK.
   assert(forward(areca::im::Key_Shift_L, true, context));
   assert(context.commits.empty());
-  auto watchdog =
-      loop.addTimeEvent(CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + 1000000,
-                        1, [](areca::im::EventSourceTime *, uint64_t) {
-                          assert(false);
-                          return false;
-                        });
+  auto watchdog = loop.addTimeEvent(
+      CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + 1000000, 1,
+      [](areca::im::EventSourceTime *, uint64_t) {
+        assert(false);
+        return false;
+      });
   loop.exec();
   assert(done == 1 && !backend.hasPending());
   assert(context.commits == "x");

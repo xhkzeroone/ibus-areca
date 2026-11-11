@@ -31,8 +31,7 @@ ApplyStatus XTestBackspaceBackend::apply(im::InputContext &inputContext,
   remainingBackspaces_ = plan.backspaceCount;
   sentBackspaces_ = 0;
   backspaceDelayMs_ = plan.xtestBackspaceDelayMs;
-  const char *frontend = inputContext.frontend();
-  afterBackspaceWaitMs_ = resolveAfterXTestBackspaceWaitMs(frontend, plan);
+  afterBackspaceWaitMs_ = plan.afterXTestBackspaceWaitMs;
   timerAccuracyUsec_ = plan.timerAccuracyUsec;
   commitText_ = plan.commitText;
 
@@ -43,7 +42,6 @@ ApplyStatus XTestBackspaceBackend::apply(im::InputContext &inputContext,
                  << " after_wait_ms=" << afterBackspaceWaitMs_
                  << " adaptive_extra_ms="
                  << adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_)
-                 << " frontend=" << (frontend ? frontend : "")
                  << " accuracy_us=" << timerAccuracyUsec_;
   }
 

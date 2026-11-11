@@ -33,7 +33,6 @@ public:
   explicit Context(areca::im::InputContextManager &manager)
       : InputContext(manager, "backspace-test") {}
   ~Context() override { destroy(); }
-  const char *frontend() const override { return "ibus"; }
   void commitStringImpl(const std::string &text) override {
     commits += text;
     commitTime = areca::im::now(CLOCK_MONOTONIC);
@@ -58,17 +57,18 @@ void run(bool earlyAck, uint32_t waitMs, uint32_t count) {
   plan.backspaceCount = count;
   plan.backspaceDelayMs = 20;
   plan.uinputBackspaceAckTimeoutMs = 40;
-  plan.ibusAfterBackspaceWaitMs = waitMs;
+  plan.afterBackspaceWaitMs = waitMs;
   plan.commitText = "X";
   int completed = 0;
   uint64_t ackTime = 0;
   auto deliver = [&](bool release, bool repeat) {
-    areca::im::KeyEvent event(
-        &context,
-        areca::im::Key(areca::im::Key_BackSpace,
-                   repeat ? areca::im::KeyState::Repeat : areca::im::KeyState::NoState,
-                   22),
-        release, 1234);
+    areca::im::KeyEvent event(&context,
+                              areca::im::Key(areca::im::Key_BackSpace,
+                                             repeat
+                                                 ? areca::im::KeyState::Repeat
+                                                 : areca::im::KeyState::NoState,
+                                             22),
+                              release, 1234);
     assert(backend.handleBackspace(event));
     assert(!event.filtered() && !event.accepted());
   };
@@ -82,28 +82,28 @@ void run(bool earlyAck, uint32_t waitMs, uint32_t count) {
   if (earlyAck) {
     // Đã phát một Backspace, nhưng hai press cùng time/code làm đủ ngưỡng.
     // Timer gửi phím thứ hai phải tiếp tục dù timer commit đã bắt đầu.
-    ackTimer =
-        loop.addTimeEvent(CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + 1000,
-                          1, [&](areca::im::EventSourceTime *, uint64_t) {
-                            assert(device.keys.size() == 2);
-                            ackTime = areca::im::now(CLOCK_MONOTONIC);
-                            deliver(false, false);
-                            deliver(false, true);
-                            deliver(true, false);
-                            deliver(true, false);
-                            // Event sau ngưỡng vẫn forward và không mở thêm lần
-                            // commit.
-                            deliver(false, true);
-                            return false;
-                          });
+    ackTimer = loop.addTimeEvent(CLOCK_MONOTONIC,
+                                 areca::im::now(CLOCK_MONOTONIC) + 1000, 1,
+                                 [&](areca::im::EventSourceTime *, uint64_t) {
+                                   assert(device.keys.size() == 2);
+                                   ackTime = areca::im::now(CLOCK_MONOTONIC);
+                                   deliver(false, false);
+                                   deliver(false, true);
+                                   deliver(true, false);
+                                   deliver(true, false);
+                                   // Event sau ngưỡng vẫn forward và không mở
+                                   // thêm lần commit.
+                                   deliver(false, true);
+                                   return false;
+                                 });
     ackTimer->setOneShot();
   }
-  auto watchdog =
-      loop.addTimeEvent(CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + 2000000,
-                        1, [](areca::im::EventSourceTime *, uint64_t) {
-                          assert(false);
-                          return false;
-                        });
+  auto watchdog = loop.addTimeEvent(
+      CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + 2000000, 1,
+      [](areca::im::EventSourceTime *, uint64_t) {
+        assert(false);
+        return false;
+      });
   loop.exec();
   assert(completed == 1 && !backend.hasPending());
   assert(context.commits == "X");

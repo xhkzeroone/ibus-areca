@@ -29,8 +29,7 @@ ApplyStatus XTestShiftSelectBackend::apply(im::InputContext &inputContext,
   selectedCharacters_ = plan.backspaceCount;
   remainingLefts_ = selectedCharacters_;
   shiftSelectDelayMs_ = plan.uinputShiftSelectDelayMs;
-  const char *frontend = inputContext.frontend();
-  afterSelectWaitMs_ = resolveAfterUinputShiftSelectWaitMs(frontend, plan);
+  afterSelectWaitMs_ = plan.afterUinputShiftSelectWaitMs;
   timerAccuracyUsec_ = plan.timerAccuracyUsec;
   commitText_ = plan.commitText;
 
@@ -39,7 +38,6 @@ ApplyStatus XTestShiftSelectBackend::apply(im::InputContext &inputContext,
                  << " chars=" << selectedCharacters_
                  << " delay_ms=" << shiftSelectDelayMs_
                  << " after_wait_ms=" << afterSelectWaitMs_
-                 << " frontend=" << (frontend ? frontend : "")
                  << " accuracy_us=" << timerAccuracyUsec_;
   }
 

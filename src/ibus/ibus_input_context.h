@@ -17,7 +17,6 @@ public:
   explicit IbusInputContext(IBusEngine *engine);
   ~IbusInputContext() override;
 
-  const char *frontend() const override { return frontend_.c_str(); }
   IBusEngine *engine() const { return engine_; }
 
   // Client IBus báo dạng "<toolkit>:<chương trình>", ví dụ "gtk3-im:gedit".
@@ -42,7 +41,6 @@ private:
   void updateLookupTable();
 
   IBusEngine *engine_;
-  std::string frontend_ = "ibus";
   // IBus không đánh dấu phím lặp; press đến khi phím đó chưa nhả là lặp.
   guint heldKeyval_ = 0;
   bool showingInformation_ = false;

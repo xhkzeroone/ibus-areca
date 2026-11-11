@@ -85,28 +85,15 @@ ADVANCED_DEFAULTS = {
     "BackspaceDelayMs": 1,
     "UinputBackspaceAckTimeoutMs": 150,
     "AfterBackspaceWaitMs": 10,
-    "WaylandAfterBackspaceWaitMs": 10,
-    "XimAfterBackspaceWaitMs": 10,
-    "DbusAfterBackspaceWaitMs": 10,
-    "IBusAfterBackspaceWaitMs": 10,
     "UinputShiftSelectDelayMs": 1,
     "UinputShiftSelectAckTimeoutMs": 150,
     "AfterUinputShiftSelectWaitMs": 10,
-    "WaylandAfterUinputShiftSelectWaitMs": 5,
-    "XimAfterUinputShiftSelectWaitMs": 10,
-    "DbusAfterUinputShiftSelectWaitMs": 10,
-    "IBusAfterUinputShiftSelectWaitMs": 10,
     "SurroundingWaitMs": 3,
     "SurroundingProbeTimeoutMs": 80,
     "SurroundingDeleteDelayMs": 10,
-    "WaylandSurroundingDeleteDelayMs": 0,
     "AfterSurroundingDeleteWaitMs": 1,
     "XTestBackspaceDelayMs": 1,
     "AfterXTestBackspaceWaitMs": 10,
-    "WaylandAfterXTestBackspaceWaitMs": 10,
-    "XimAfterXTestBackspaceWaitMs": 10,
-    "DbusAfterXTestBackspaceWaitMs": 10,
-    "IBusAfterXTestBackspaceWaitMs": 10,
     "PostCommitDelayMs": 20,
     "PreciseTiming": True,
     "UseSurroundingV2InsteadOfSurroundingV1": False,
@@ -1042,8 +1029,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         row.add_css_class("app-row")
         name = Gtk.Entry(placeholder_text="Tên ứng dụng (vd: code-oss)", hexpand=True)
         name.set_text(entry.get("AppName", ""))
-        frontend = Gtk.Label(label=entry.get("Frontend", ""), width_chars=8)
-        frontend.add_css_class("dim-label")
         mode = entry.get("Mode", "Tự động")
         mode_dropdown = Gtk.DropDown.new_from_strings(APP_MODES)
         mode_dropdown.set_selected(enum_index(mode, APP_MODES))
@@ -1053,7 +1038,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         remove.add_css_class("flat")
         remove.add_css_class("remove-action")
         row.append(name)
-        row.append(frontend)
         row.append(mode_dropdown)
         row.append(remove)
 
@@ -1071,13 +1055,11 @@ class SettingsWindow(Gtk.ApplicationWindow):
         row = self.app_rows.get_first_child()
         while row:
             name = row.get_first_child()
-            frontend = name.get_next_sibling()
-            mode = frontend.get_next_sibling()
+            mode = name.get_next_sibling()
             app_name = name.get_text().strip()
             if app_name:
                 entries.append({
                     "AppName": app_name,
-                    "Frontend": frontend.get_text(),
                     "Mode": APP_MODES[mode.get_selected()],
                 })
             row = row.get_next_sibling()
@@ -1158,10 +1140,10 @@ class SettingsWindow(Gtk.ApplicationWindow):
     def _build_advanced(self) -> Gtk.Widget:
         page, content = self._page("Nâng cao", "Các giá trị timing và tương thích. Chỉ đổi khi ứng dụng gặp lỗi nhập liệu.")
         groups = [
-            ("Backspace", [("Delay giữa Backspace (ms)", "BackspaceDelayMs", 1000), ("Chờ sau Backspace (ms)", "AfterBackspaceWaitMs", 5000), ("Wayland", "WaylandAfterBackspaceWaitMs", 5000), ("XIM", "XimAfterBackspaceWaitMs", 5000), ("DBus", "DbusAfterBackspaceWaitMs", 5000), ("IBus", "IBusAfterBackspaceWaitMs", 5000)]),
-            ("Shift+Left", [("Delay giữa các phím (ms)", "UinputShiftSelectDelayMs", 1000), ("Chờ sau khi thả Shift (ms)", "AfterUinputShiftSelectWaitMs", 5000), ("Wayland", "WaylandAfterUinputShiftSelectWaitMs", 5000), ("XIM", "XimAfterUinputShiftSelectWaitMs", 5000), ("DBus", "DbusAfterUinputShiftSelectWaitMs", 5000), ("IBus", "IBusAfterUinputShiftSelectWaitMs", 5000)]),
-            ("Surrounding text", [("Chờ sau xóa surrounding (ms)", "SurroundingWaitMs", 5000), ("Delay xóa surrounding v2 (ms)", "SurroundingDeleteDelayMs", 1000), ("Delay xóa v2 trên Wayland (ms)", "WaylandSurroundingDeleteDelayMs", 1000), ("Chờ sau lệnh xóa cuối (ms)", "AfterSurroundingDeleteWaitMs", 5000)]),
-            ("Native Backspace", [("Delay giữa Backspace Native (ms)", "XTestBackspaceDelayMs", 1000), ("Chờ sau Backspace Native (ms)", "AfterXTestBackspaceWaitMs", 5000), ("Wayland", "WaylandAfterXTestBackspaceWaitMs", 5000), ("XIM", "XimAfterXTestBackspaceWaitMs", 5000), ("DBus", "DbusAfterXTestBackspaceWaitMs", 5000), ("IBus", "IBusAfterXTestBackspaceWaitMs", 5000)]),
+            ("Backspace", [("Delay giữa Backspace (ms)", "BackspaceDelayMs", 1000), ("Chờ sau Backspace (ms)", "AfterBackspaceWaitMs", 5000)]),
+            ("Shift+Left", [("Delay giữa các phím (ms)", "UinputShiftSelectDelayMs", 1000), ("Chờ sau khi thả Shift (ms)", "AfterUinputShiftSelectWaitMs", 5000)]),
+            ("Surrounding text", [("Chờ sau xóa surrounding (ms)", "SurroundingWaitMs", 5000), ("Delay xóa surrounding v2 (ms)", "SurroundingDeleteDelayMs", 1000), ("Chờ sau lệnh xóa cuối (ms)", "AfterSurroundingDeleteWaitMs", 5000)]),
+            ("Native Backspace", [("Delay giữa Backspace Native (ms)", "XTestBackspaceDelayMs", 1000), ("Chờ sau Backspace Native (ms)", "AfterXTestBackspaceWaitMs", 5000)]),
         ]
         for title, values in groups:
             group = self._section(content, title)
@@ -1199,20 +1181,10 @@ class SettingsWindow(Gtk.ApplicationWindow):
 
     def _performance_preset(self, _button: Gtk.Button) -> None:
         preset_values = {
-            "WaylandAfterBackspaceWaitMs": 3,
-            "DbusAfterBackspaceWaitMs": 5,
-            "IBusAfterBackspaceWaitMs": 5,
-            "WaylandAfterUinputShiftSelectWaitMs": 3,
-            "DbusAfterUinputShiftSelectWaitMs": 5,
-            "IBusAfterUinputShiftSelectWaitMs": 5,
-            "SurroundingWaitMs": 1,
+                                                            "SurroundingWaitMs": 1,
             "SurroundingDeleteDelayMs": 1,
-            "WaylandSurroundingDeleteDelayMs": 1,
-            "AfterSurroundingDeleteWaitMs": 1,
-            "WaylandAfterXTestBackspaceWaitMs": 3,
-            "DbusAfterXTestBackspaceWaitMs": 5,
-            "IBusAfterXTestBackspaceWaitMs": 5,
-        }
+                    "AfterSurroundingDeleteWaitMs": 1,
+                                }
         for key, value in preset_values.items():
             self.store.advanced.set("", key, str(value))
         self._applying_preset = True

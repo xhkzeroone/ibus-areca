@@ -50,17 +50,8 @@ IbusInputContext::~IbusInputContext() {
 
 void IbusInputContext::setClient(const std::string &client) {
   const auto colon = client.find(':');
-  const std::string toolkit = client.substr(0, colon);
   if (colon != std::string::npos) {
     setProgram(client.substr(colon + 1));
-  }
-  // Timing chọn theo đường client: XIM và Wayland khác hẳn module GTK/Qt.
-  if (toolkit.starts_with("xim")) {
-    frontend_ = "xim";
-  } else if (toolkit.find("wayland") != std::string::npos) {
-    frontend_ = "wayland";
-  } else {
-    frontend_ = "ibus";
   }
 }
 

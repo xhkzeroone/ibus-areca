@@ -50,7 +50,6 @@ public:
       : areca::im::InputContext(manager, std::move(program)), events_(events) {}
   ~DummyInputContext() override { destroy(); }
 
-  const char *frontend() const override { return "wayland"; }
   void commitStringImpl(const std::string &text) override {
     events_.push_back("commit:" + text);
     committedText += text;

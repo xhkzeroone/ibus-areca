@@ -182,8 +182,7 @@ ArecaEngine::resolveSurroundingFallbackBackend(im::InputContext &inputContext) {
       return shiftBackend;
     }
   }
-  const char *frontend = inputContext.frontend();
-  const bool isTerminal = inputTypeDetector_.isTerminal(prog, frontend);
+  const bool isTerminal = inputTypeDetector_.isTerminal(prog);
   const bool canForward =
       inputTypeDetector_.canForwardBackspaces(inputContext, prog);
   return resolvePreferredBackspaceBackend(isTerminal || !canForward);
@@ -282,8 +281,7 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
 
   const std::string program = resolveProgram(inputContext, state);
 
-  const char *frontend = inputContext.frontend();
-  const bool isTerminal = inputTypeDetector_.isTerminal(program, frontend);
+  const bool isTerminal = inputTypeDetector_.isTerminal(program);
   const bool canForward =
       inputTypeDetector_.canForwardBackspaces(inputContext, program);
   const bool preferHardware = isTerminal || !canForward;
@@ -463,7 +461,6 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
               ARECA_INFO() << "areca: browser surrounding disabled or failed, "
                               "fallback to shift-select"
                            << " program=" << program
-                           << " frontend=" << (frontend ? frontend : "")
                            << " backend=" << shiftBackend->name();
             }
             return {shiftBackend};
@@ -532,7 +529,6 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
         ARECA_INFO() << "areca: browser surrounding disabled or failed, "
                         "fallback to shift-select"
                      << " program=" << program
-                     << " frontend=" << (frontend ? frontend : "")
                      << " backend=" << shiftBackend->name();
       }
       return {shiftBackend};

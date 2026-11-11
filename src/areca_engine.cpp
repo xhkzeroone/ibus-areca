@@ -212,7 +212,7 @@ bool ArecaEngine::eraseFinalizedPreeditWord(
     PreeditModeHandler::FinalizedWordEraseDone onDone) {
   const std::string program = resolveProgram(inputContext, nullptr);
   const bool preferHardware =
-      inputTypeDetector_.isTerminal(program, inputContext.frontend()) ||
+      inputTypeDetector_.isTerminal(program) ||
       !inputTypeDetector_.canForwardBackspaces(inputContext, program);
   auto *backend = resolvePreferredBackspaceBackend(preferHardware);
   if (!backend) {
@@ -230,21 +230,8 @@ bool ArecaEngine::eraseFinalizedPreeditWord(
   plan.uinputBackspaceAckTimeoutMs =
       schedulerTiming.uinputBackspaceAckTimeoutMs;
   plan.afterBackspaceWaitMs = schedulerTiming.afterBackspaceWaitMs;
-  plan.waylandAfterBackspaceWaitMs =
-      schedulerTiming.waylandAfterBackspaceWaitMs;
-  plan.ximAfterBackspaceWaitMs = schedulerTiming.ximAfterBackspaceWaitMs;
-  plan.dbusAfterBackspaceWaitMs = schedulerTiming.dbusAfterBackspaceWaitMs;
-  plan.ibusAfterBackspaceWaitMs = schedulerTiming.ibusAfterBackspaceWaitMs;
   plan.xtestBackspaceDelayMs = schedulerTiming.xtestBackspaceDelayMs;
   plan.afterXTestBackspaceWaitMs = schedulerTiming.afterXTestBackspaceWaitMs;
-  plan.waylandAfterXTestBackspaceWaitMs =
-      schedulerTiming.waylandAfterXTestBackspaceWaitMs;
-  plan.ximAfterXTestBackspaceWaitMs =
-      schedulerTiming.ximAfterXTestBackspaceWaitMs;
-  plan.dbusAfterXTestBackspaceWaitMs =
-      schedulerTiming.dbusAfterXTestBackspaceWaitMs;
-  plan.ibusAfterXTestBackspaceWaitMs =
-      schedulerTiming.ibusAfterXTestBackspaceWaitMs;
   plan.timerAccuracyUsec = schedulerTiming.timerAccuracyUsec;
 
   const auto status = backend->apply(
@@ -449,10 +436,8 @@ void ArecaEngine::keyEvent(im::KeyEvent &event) {
   }
   // Giống ô mật khẩu: terminal được chuyển tiếp nguyên phím, không qua Bamboo.
   if (config_.disableVietnameseInTerminal.value() &&
-      inputTypeDetector_.isTerminal(
-          resolveProgram(*inputContext,
-                         inputContext->propertyFor(&rewriteStateFactory_)),
-          inputContext->frontend())) {
+      inputTypeDetector_.isTerminal(resolveProgram(
+          *inputContext, inputContext->propertyFor(&rewriteStateFactory_)))) {
     if (isBackendSelecting(*inputContext)) {
       inputContext->inputPanel().reset();
       inputContext->updateUserInterface(im::UserInterfaceComponent::InputPanel,

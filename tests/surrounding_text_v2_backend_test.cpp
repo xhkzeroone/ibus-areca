@@ -19,7 +19,6 @@ public:
       : areca::im::InputContext(manager, "test-app"), events_(events) {}
   ~DummyInputContext() override { destroy(); }
 
-  const char *frontend() const override { return "wayland"; }
   void commitStringImpl(const std::string &text) override {
     events_.push_back("commit:" + text);
   }
@@ -70,7 +69,6 @@ areca::RewritePlan makeProbePlan(uint64_t transactionId,
   plan.transactionId = transactionId;
   plan.backspaceCount = backspaceCount;
   plan.surroundingDeleteDelayMs = 0;
-  plan.waylandSurroundingDeleteDelayMs = 0;
   plan.afterSurroundingDeleteWaitMs = 1;
   plan.commitText = "õ";
   plan.probeSurrounding = probeSurrounding;
@@ -315,7 +313,6 @@ int main() {
 
   areca::RewritePlan plan;
   assert(plan.surroundingDeleteDelayMs == 10);
-  assert(plan.waylandSurroundingDeleteDelayMs == 0);
   assert(plan.afterSurroundingDeleteWaitMs == 1);
 
   areca::AdaptiveWait adaptiveWait;

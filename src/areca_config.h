@@ -10,17 +10,17 @@
 namespace areca {
 
 enum class PresentationMode { Rewrite, Preedit, Redirect };
-ARECA_CONFIG_ENUM_NAME(PresentationMode, N_("Rewrite trực tiếp"),
-                                 N_("Preedit"), N_("Redirect (EN)"));
+ARECA_CONFIG_ENUM_NAME(PresentationMode, N_("Rewrite trực tiếp"), N_("Preedit"),
+                       N_("Redirect (EN)"));
 
 enum class SpellcheckMode { Off, Basic, Realtime };
 ARECA_CONFIG_ENUM_NAME(SpellcheckMode, N_("Không kiểm tra (Tắt)"),
-                                 N_("Khôi phục từ sau khi gõ xong"),
-                                 N_("Khôi phục từ ngay trong lúc gõ"));
+                       N_("Khôi phục từ sau khi gõ xong"),
+                       N_("Khôi phục từ ngay trong lúc gõ"));
 
 enum class MacroBypassModifier { Disabled, Shift, Control, Alt, Super };
-ARECA_CONFIG_ENUM_NAME(MacroBypassModifier, N_("Tắt"), N_("Shift"),
-                                 N_("Ctrl"), N_("Alt"), N_("Super"));
+ARECA_CONFIG_ENUM_NAME(MacroBypassModifier, N_("Tắt"), N_("Shift"), N_("Ctrl"),
+                       N_("Alt"), N_("Super"));
 
 inline bool isMacroBypassSpace(const im::Key &key,
                                MacroBypassModifier modifier) {
@@ -33,11 +33,10 @@ inline bool isMacroBypassSpace(const im::Key &key,
   const bool shift = states.test(im::KeyState::Shift);
   const bool control = states.test(im::KeyState::Ctrl);
   const bool alt = states.test(im::KeyState::Alt);
-  const bool super = states.test(im::KeyState::Super) ||
-                     states.test(im::KeyState::Meta) ||
-                     states.test(im::KeyState::Hyper) ||
-                     states.test(im::KeyState::Super2) ||
-                     states.test(im::KeyState::Hyper2);
+  const bool super =
+      states.test(im::KeyState::Super) || states.test(im::KeyState::Meta) ||
+      states.test(im::KeyState::Hyper) || states.test(im::KeyState::Super2) ||
+      states.test(im::KeyState::Hyper2);
   switch (modifier) {
   case MacroBypassModifier::Shift:
     return shift && !control && !alt && !super;
@@ -53,10 +52,9 @@ inline bool isMacroBypassSpace(const im::Key &key,
   return false;
 }
 
-inline bool
-shouldForceBackspaceForUrl(bool enabled,
-                           const im::CapabilityFlags &capabilities,
-                           bool inAddressBar = false) {
+inline bool shouldForceBackspaceForUrl(bool enabled,
+                                       const im::CapabilityFlags &capabilities,
+                                       bool inAddressBar = false) {
   return enabled &&
          (capabilities.test(im::CapabilityFlag::Url) || inAddressBar);
 }
@@ -93,10 +91,9 @@ enum class AppBackendMode {
   Preedit = 4,
   Redirect = 5
 };
-ARECA_CONFIG_ENUM_NAME(AppBackendMode, N_("Tự động"),
-                                 N_("Surrounding"), N_("Shift select"),
-                                 N_("Backspace"), N_("Preedit"),
-                                 N_("Redirect (EN)"));
+ARECA_CONFIG_ENUM_NAME(AppBackendMode, N_("Tự động"), N_("Surrounding"),
+                       N_("Shift select"), N_("Backspace"), N_("Preedit"),
+                       N_("Redirect (EN)"));
 
 inline PresentationMode
 presentationModeForAppSetting(AppBackendMode mode, PresentationMode fallback) {
@@ -118,20 +115,17 @@ presentationModeForAppSetting(AppBackendMode mode, PresentationMode fallback) {
 ARECA_CONFIGURATION(
     AppBackendOverrideEntry,
     im::Option<std::string> appName{this, "AppName", N_("Tên ứng dụng"), ""};
-    im::Option<std::string> frontend{this, "Frontend", N_("Frontend"), ""};
     im::OptionWithAnnotation<AppBackendMode, im::EnumAnnotation> mode{
         this, "Mode", N_("Chế độ / backend"), AppBackendMode::Auto};);
 
-ARECA_CONFIGURATION(MacroEntry,
-                    im::Option<std::string> key{this, "Key",
-                                                   N_("Từ viết tắt"), ""};
-                    im::Option<std::string> value{
-                        this, "Value", N_("Nội dung thay thế"), ""};);
+ARECA_CONFIGURATION(
+    MacroEntry, im::Option<std::string> key{this, "Key", N_("Từ viết tắt"), ""};
+    im::Option<std::string> value{this, "Value", N_("Nội dung thay thế"), ""};);
 
 ARECA_CONFIGURATION(
     AppProfilesConfig,
     im::OptionWithAnnotation<std::vector<AppBackendOverrideEntry>,
-                                im::ListDisplayOptionAnnotation>
+                             im::ListDisplayOptionAnnotation>
         appOverrides{this,
                      "AppOverrides",
                      N_("Cấu hình chế độ / backend theo ứng dụng"),
@@ -140,17 +134,16 @@ ARECA_CONFIGURATION(
                      {},
                      im::ListDisplayOptionAnnotation("AppName")};);
 
-ARECA_CONFIGURATION(
-    MacroTableConfig,
-    im::OptionWithAnnotation<std::vector<MacroEntry>,
-                                im::ListDisplayOptionAnnotation>
-        macros{this,
-               "Macro",
-               N_("Danh sách macro"),
-               {},
-               {},
-               {},
-               im::ListDisplayOptionAnnotation("Key")};);
+ARECA_CONFIGURATION(MacroTableConfig,
+                    im::OptionWithAnnotation<std::vector<MacroEntry>,
+                                             im::ListDisplayOptionAnnotation>
+                        macros{this,
+                               "Macro",
+                               N_("Danh sách macro"),
+                               {},
+                               {},
+                               {},
+                               im::ListDisplayOptionAnnotation("Key")};);
 
 ARECA_CONFIGURATION(
     AdvancedConfig,
@@ -164,21 +157,6 @@ ARECA_CONFIGURATION(
     im::Option<int, im::IntConstrain> afterBackspaceWaitMs{
         this, "AfterBackspaceWaitMs", N_("Chờ sau Backspace cuối (ms)"), 10,
         im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> waylandAfterBackspaceWaitMs{
-        this, "WaylandAfterBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối Wayland (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> ximAfterBackspaceWaitMs{
-        this, "XimAfterBackspaceWaitMs", N_("Chờ sau Backspace cuối XIM (ms)"),
-        10, im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> dbusAfterBackspaceWaitMs{
-        this, "DbusAfterBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối DBus (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> ibusAfterBackspaceWaitMs{
-        this, "IBusAfterBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối IBus (ms)"), 10,
-        im::IntConstrain(0, 5000)};
     im::Option<int, im::IntConstrain> uinputShiftSelectDelayMs{
         this, "UinputShiftSelectDelayMs",
         N_("Delay giữa các phím uinput Shift+Left (ms)"), 1,
@@ -189,24 +167,7 @@ ARECA_CONFIGURATION(
         im::IntConstrain(1, 5000)};
     im::Option<int, im::IntConstrain> afterUinputShiftSelectWaitMs{
         this, "AfterUinputShiftSelectWaitMs",
-        N_("Chờ sau khi thả Shift uinput (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> waylandAfterUinputShiftSelectWaitMs{
-        this, "WaylandAfterUinputShiftSelectWaitMs",
-        N_("Chờ sau khi thả Shift uinput Wayland (ms)"), 5,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> ximAfterUinputShiftSelectWaitMs{
-        this, "XimAfterUinputShiftSelectWaitMs",
-        N_("Chờ sau khi thả Shift uinput XIM (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> dbusAfterUinputShiftSelectWaitMs{
-        this, "DbusAfterUinputShiftSelectWaitMs",
-        N_("Chờ sau khi thả Shift uinput DBus (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> ibusAfterUinputShiftSelectWaitMs{
-        this, "IBusAfterUinputShiftSelectWaitMs",
-        N_("Chờ sau khi thả Shift uinput IBus (ms)"), 10,
-        im::IntConstrain(0, 5000)};
+        N_("Chờ sau khi thả Shift uinput (ms)"), 10, im::IntConstrain(0, 5000)};
     im::Option<int, im::IntConstrain> surroundingWaitMs{
         this, "SurroundingWaitMs", N_("Chờ sau xóa surrounding text (ms)"), 3,
         im::IntConstrain(0, 5000)};
@@ -217,10 +178,6 @@ ARECA_CONFIGURATION(
     im::Option<int, im::IntConstrain> surroundingDeleteDelayMs{
         this, "SurroundingDeleteDelayMs",
         N_("Delay giữa các lệnh xóa surrounding v2 (ms)"), 10,
-        im::IntConstrain(0, 1000)};
-    im::Option<int, im::IntConstrain> waylandSurroundingDeleteDelayMs{
-        this, "WaylandSurroundingDeleteDelayMs",
-        N_("Delay giữa các lệnh xóa surrounding v2 Wayland (ms)"), 0,
         im::IntConstrain(0, 1000)};
     im::Option<int, im::IntConstrain> afterSurroundingDeleteWaitMs{
         this, "AfterSurroundingDeleteWaitMs",
@@ -234,27 +191,11 @@ ARECA_CONFIGURATION(
         this, "AfterXTestBackspaceWaitMs",
         N_("Chờ sau Backspace cuối Native (ms)"), 10,
         im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> waylandAfterXTestBackspaceWaitMs{
-        this, "WaylandAfterXTestBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối Native Wayland (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> ximAfterXTestBackspaceWaitMs{
-        this, "XimAfterXTestBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối Native XIM (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> dbusAfterXTestBackspaceWaitMs{
-        this, "DbusAfterXTestBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối Native DBus (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> ibusAfterXTestBackspaceWaitMs{
-        this, "IBusAfterXTestBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối Native IBus (ms)"), 10,
-        im::IntConstrain(0, 5000)};
     im::Option<int, im::IntConstrain> postCommitDelayMs{
         this, "PostCommitDelayMs", N_("Delay sau mỗi commit (ms)"), 20,
         im::IntConstrain(0, 5000)};
     im::Option<bool> preciseTiming{this, "PreciseTiming",
-                                      N_("Dùng timer độ chính xác cao"), true};
+                                   N_("Dùng timer độ chính xác cao"), true};
     im::Option<bool> useSurroundingV2InsteadOfSurroundingV1{
         this, "UseSurroundingV2InsteadOfSurroundingV1",
         N_("Dùng Surrounding v2 thay cho Surrounding v1"), false};
@@ -273,25 +214,15 @@ ARECA_CONFIGURATION(
 
 inline void applyBestPerformancePreset(AdvancedConfig &config) {
   constexpr int rewriteWaitMs = 5;
-  constexpr int waylandWaitMs = 3;
   constexpr int surroundingWaitMs = 1;
 
-  config.waylandAfterBackspaceWaitMs.setValue(waylandWaitMs);
-  config.dbusAfterBackspaceWaitMs.setValue(rewriteWaitMs);
-  config.ibusAfterBackspaceWaitMs.setValue(rewriteWaitMs);
-
-  config.waylandAfterUinputShiftSelectWaitMs.setValue(waylandWaitMs);
-  config.dbusAfterUinputShiftSelectWaitMs.setValue(rewriteWaitMs);
-  config.ibusAfterUinputShiftSelectWaitMs.setValue(rewriteWaitMs);
+  config.afterBackspaceWaitMs.setValue(rewriteWaitMs);
+  config.afterUinputShiftSelectWaitMs.setValue(rewriteWaitMs);
+  config.afterXTestBackspaceWaitMs.setValue(rewriteWaitMs);
 
   config.surroundingWaitMs.setValue(surroundingWaitMs);
   config.surroundingDeleteDelayMs.setValue(surroundingWaitMs);
-  config.waylandSurroundingDeleteDelayMs.setValue(surroundingWaitMs);
   config.afterSurroundingDeleteWaitMs.setValue(surroundingWaitMs);
-
-  config.waylandAfterXTestBackspaceWaitMs.setValue(waylandWaitMs);
-  config.dbusAfterXTestBackspaceWaitMs.setValue(rewriteWaitMs);
-  config.ibusAfterXTestBackspaceWaitMs.setValue(rewriteWaitMs);
 }
 
 ARECA_CONFIGURATION(
@@ -299,14 +230,13 @@ ARECA_CONFIGURATION(
     im::HiddenOption<PresentationMode> presentationMode{
         this, "PresentationMode", N_("Chế độ hiển thị"),
         PresentationMode::Rewrite};
-    im::HiddenOption<im::KeyList,
-                        im::ListConstrain<im::KeyConstrain>>
-        switchModeKey{this,
-                      "SwitchModeKey",
-                      N_("Phím tắt chuyển chế độ gõ"),
-                      {},
-                      im::KeyListConstrain(
-                          im::KeyConstrainFlag::AllowModifierLess)};
+    im::HiddenOption<im::KeyList, im::ListConstrain<im::KeyConstrain>>
+        switchModeKey{
+            this,
+            "SwitchModeKey",
+            N_("Phím tắt chuyển chế độ gõ"),
+            {},
+            im::KeyListConstrain(im::KeyConstrainFlag::AllowModifierLess)};
     im::KeyListOption selectBackendKey{
         this,
         "SelectBackendKey",
@@ -324,25 +254,25 @@ ARECA_CONFIGURATION(
         this, "PostCommitDelayMs", N_("Delay sau mỗi commit (ms)"), 20,
         im::IntConstrain(0, 5000)};
     im::HiddenOption<std::string> trayIcon{this, "TrayIcon",
-                                              N_("Biểu tượng khay hệ thống"),
-                                              "org.fcitx.Fcitx5.fcitx-areca"};
+                                           N_("Biểu tượng khay hệ thống"),
+                                           "org.fcitx.Fcitx5.fcitx-areca"};
     im::OptionWithAnnotation<std::string, StringListAnnotation>
         bambooInputMethod{this, "BambooInputMethod", N_("Kiểu gõ Bamboo"),
                           "Telex 2"};
-    im::OptionWithAnnotation<std::string, StringListAnnotation>
-        outputCharset{this, "OutputCharset", N_("Bảng mã đầu ra"), "Unicode"};
-    im::OptionWithAnnotation<SpellcheckMode, im::EnumAnnotation>
-        spellcheckMode{this, "SpellcheckMode", N_("Chế độ kiểm tra chính tả"),
-                       SpellcheckMode::Realtime};
+    im::OptionWithAnnotation<std::string, StringListAnnotation> outputCharset{
+        this, "OutputCharset", N_("Bảng mã đầu ra"), "Unicode"};
+    im::OptionWithAnnotation<SpellcheckMode, im::EnumAnnotation> spellcheckMode{
+        this, "SpellcheckMode", N_("Chế độ kiểm tra chính tả"),
+        SpellcheckMode::Realtime};
     im::Option<bool> modernStyle{
         this, "ModernStyle", N_("Đặt dấu kiểu oà, uý thay cho òa, úy"), true};
     im::Option<bool> autoCapitalizeAfterPunctuation{
         this, "AutoCapitalizeAfterPunctuation",
         N_("Tự viết hoa sau dấu kết câu (. ! ?)"), false};
     im::Option<bool> enableMacro{this, "EnableMacro", N_("Bật macro"), true};
-    im::Option<bool> capitalizeMacro{
-        this, "CapitalizeMacro", N_("Tự đổi hoa/thường cho nội dung macro"),
-        true};
+    im::Option<bool> capitalizeMacro{this, "CapitalizeMacro",
+                                     N_("Tự đổi hoa/thường cho nội dung macro"),
+                                     true};
     im::Option<bool> revertMacroOnBackspace{
         this, "RevertMacroOnBackspace", N_("Hoàn tác macro khi nhấn Backspace"),
         true};
@@ -350,12 +280,11 @@ ARECA_CONFIGURATION(
         macroBypassModifier{this, "MacroBypassModifier",
                             N_("Phím giữ để tạm bỏ qua macro khi nhấn Space"),
                             MacroBypassModifier::Shift};
-    im::SubConfigOption macroEditor{this, "MacroEditor",
-                                       N_("Chỉnh sửa macro"),
-                                       "fcitx://config/addon/areca/macro"};
-    im::SubConfigOption appOverridesEditor{
-        this, "AppOverridesEditor", N_("Cấu hình backend theo ứng dụng"),
-        "fcitx://config/addon/areca/apps"};
+    im::SubConfigOption macroEditor{this, "MacroEditor", N_("Chỉnh sửa macro"),
+                                    "fcitx://config/addon/areca/macro"};
+    im::SubConfigOption appOverridesEditor{this, "AppOverridesEditor",
+                                           N_("Cấu hình backend theo ứng dụng"),
+                                           "fcitx://config/addon/areca/apps"};
     im::Option<bool> backspaceRecovery{
         this, "BackspaceRecovery",
         N_("Khôi phục lỗi chính tả khi nhấn Backspace"), true};
@@ -372,10 +301,9 @@ ARECA_CONFIGURATION(
     im::Option<bool> disableVietnameseInTerminal{
         this, "DisableVietnameseInTerminal",
         N_("Tắt tiếng Việt trong terminal"), false};
-    im::SubConfigOption advancedEditor{
-        this, "AdvancedEditor", N_("Cấu hình nâng cao"),
-        "fcitx://config/addon/areca/advanced"};
-    im::Option<bool> debug{this, "Debug", N_("Bật log debug Areca"),
-                              false};);
+    im::SubConfigOption advancedEditor{this, "AdvancedEditor",
+                                       N_("Cấu hình nâng cao"),
+                                       "fcitx://config/addon/areca/advanced"};
+    im::Option<bool> debug{this, "Debug", N_("Bật log debug Areca"), false};);
 
 } // namespace areca

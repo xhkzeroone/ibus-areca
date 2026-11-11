@@ -10,13 +10,9 @@ namespace {
 
 class TestInputContext final : public areca::im::InputContext {
 public:
-  explicit TestInputContext(areca::im::InputContextManager &manager,
-                            const char *frontend = "wayland")
-      : areca::im::InputContext(manager, "org.gnome.TextEditor"),
-        frontend_(frontend) {}
+  explicit TestInputContext(areca::im::InputContextManager &manager)
+      : areca::im::InputContext(manager, "org.gnome.TextEditor") {}
   ~TestInputContext() override { destroy(); }
-
-  const char *frontend() const override { return frontend_; }
 
   void commitStringImpl(const std::string &text) override {
     commits.push_back(text);
@@ -40,17 +36,18 @@ public:
   std::vector<bool> forwardedBackspaces;
 
 private:
-  const char *frontend_;
 };
 
 } // namespace
 
 int main() {
   areca::im::InputContextManager manager;
-  areca::PreeditModeHandler::StateFactory factory([](areca::im::InputContext &) {
-    return new areca::PreeditInputState("Telex 2", true, true, true, "Unicode",
-                                        true, false, 1, {{"bt", "Be There"}});
-  });
+  areca::PreeditModeHandler::StateFactory factory(
+      [](areca::im::InputContext &) {
+        return new areca::PreeditInputState("Telex 2", true, true, true,
+                                            "Unicode", true, false, 1,
+                                            {{"bt", "Be There"}});
+      });
   manager.registerProperty("preedit-surrounding-restore-test", &factory);
 
   bool enabled = true;
@@ -94,14 +91,15 @@ int main() {
 
   // Space đã commit ngay. Backspace dùng backend để xóa cả từ và boundary,
   // sau đó đưa riêng từ trở lại preedit để sửa tiếp.
-  areca::im::KeyEvent undoBoundary(&context, areca::im::Key(areca::im::Key_BackSpace));
+  areca::im::KeyEvent undoBoundary(&context,
+                                   areca::im::Key(areca::im::Key_BackSpace));
   handler.handleKeyEvent(undoBoundary);
   assert(undoBoundary.accepted());
   assert(context.propertyFor(&factory)->finalizedWordRecovery ==
          areca::FinalizedWordRecoveryState::AwaitingBackspaceRelease);
   assert(requestedBackspaces == 0);
-  areca::im::KeyEvent undoBoundaryRelease(&context, areca::im::Key(areca::im::Key_BackSpace),
-                                      true);
+  areca::im::KeyEvent undoBoundaryRelease(
+      &context, areca::im::Key(areca::im::Key_BackSpace), true);
   handler.handleKeyEvent(undoBoundaryRelease);
   assert(undoBoundaryRelease.accepted());
   assert(context.deletes.size() == 1);
@@ -119,14 +117,15 @@ int main() {
   TestInputContext macroBypassContext(manager);
   handler.activate(macroBypassContext);
   for (const char key : std::string("bt")) {
-    areca::im::KeyEvent keyEvent(&macroBypassContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
+    areca::im::KeyEvent keyEvent(
+        &macroBypassContext, areca::im::Key(areca::im::Key::keySymFromUnicode(
                                  static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
     assert(keyEvent.accepted());
   }
   areca::im::KeyEvent bypassSpace(
-      &macroBypassContext, areca::im::Key(areca::im::Key_space, areca::im::KeyState::Shift));
+      &macroBypassContext,
+      areca::im::Key(areca::im::Key_space, areca::im::KeyState::Shift));
   handler.handleKeyEvent(bypassSpace);
   assert(bypassSpace.accepted());
   assert(macroBypassContext.commits == std::vector<std::string>{"bt "});
@@ -138,7 +137,8 @@ int main() {
   middleContext.surroundingText().setText("tiến", 3, 3);
   handler.activate(middleContext);
   assert(handler.prepareSurroundingRestoreAfterClick(middleContext));
-  areca::im::KeyEvent middleTone(&middleContext, areca::im::Key(areca::im::Key_f));
+  areca::im::KeyEvent middleTone(&middleContext,
+                                 areca::im::Key(areca::im::Key_f));
   handler.handleKeyEvent(middleTone);
   assert(middleTone.accepted());
   assert(middleContext.deletes.size() == 1);
@@ -157,9 +157,9 @@ int main() {
   laggingContext.surroundingText().setText("", 0, 0);
   handler.activate(laggingContext);
   for (const char key : std::string("gox ")) {
-    areca::im::KeyEvent keyEvent(&laggingContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &laggingContext, areca::im::Key(areca::im::Key::keySymFromUnicode(
+                             static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
     assert(keyEvent.accepted());
   }
@@ -168,7 +168,8 @@ int main() {
   assert(laggingState->knownTextBeforeCursor == "gõ ");
   laggingContext.surroundingText().setText("gõ", 2, 2);
   laggingState->surroundingRestoreArmed = true;
-  areca::im::KeyEvent laggingKey(&laggingContext, areca::im::Key(areca::im::Key_n));
+  areca::im::KeyEvent laggingKey(&laggingContext,
+                                 areca::im::Key(areca::im::Key_n));
   handler.handleKeyEvent(laggingKey);
   assert(laggingKey.accepted());
   assert(laggingContext.deletes.empty());
@@ -180,7 +181,8 @@ int main() {
   laggingContext.surroundingText().setText("tưởng", 5, 5);
   handler.activate(laggingContext);
   assert(laggingState->knownTextBeforeCursor.empty());
-  areca::im::KeyEvent nextRestoreKey(&laggingContext, areca::im::Key(areca::im::Key_s));
+  areca::im::KeyEvent nextRestoreKey(&laggingContext,
+                                     areca::im::Key(areca::im::Key_s));
   handler.handleKeyEvent(nextRestoreKey);
   assert(nextRestoreKey.accepted());
   assert(laggingContext.deletes.size() == 1);
@@ -192,12 +194,13 @@ int main() {
   nbspContext.surroundingText().setText("", 0, 0);
   handler.activate(nbspContext);
   for (const char key : std::string("gox")) {
-    areca::im::KeyEvent keyEvent(&nbspContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &nbspContext, areca::im::Key(areca::im::Key::keySymFromUnicode(
+                          static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
   }
-  areca::im::KeyEvent nbspSpace(&nbspContext, areca::im::Key(areca::im::Key_space));
+  areca::im::KeyEvent nbspSpace(&nbspContext,
+                                areca::im::Key(areca::im::Key_space));
   handler.handleKeyEvent(nbspSpace);
   auto *nbspState = nbspContext.propertyFor(&factory);
   assert(nbspState->knownTextBeforeCursor == "gõ ");
@@ -215,10 +218,12 @@ int main() {
   // phần text đã commit trước con trỏ.
   enabled = false;
   TestInputContext disabledContext(manager);
-  disabledContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
+  disabledContext.setCapabilityFlags(
+      areca::im::CapabilityFlag::SurroundingText);
   disabledContext.surroundingText().setText("tưởng", 5, 5);
   handler.activate(disabledContext);
-  areca::im::KeyEvent plainKey(&disabledContext, areca::im::Key(areca::im::Key_a));
+  areca::im::KeyEvent plainKey(&disabledContext,
+                               areca::im::Key(areca::im::Key_a));
   handler.handleKeyEvent(plainKey);
   assert(plainKey.accepted());
   assert(disabledContext.deletes.empty());
@@ -233,7 +238,8 @@ int main() {
       areca::im::CapabilityFlag::SurroundingText);
   macroBoundaryContext.surroundingText().setText("không", 5, 5);
   handler.activate(macroBoundaryContext);
-  areca::im::KeyEvent macroSpace(&macroBoundaryContext, areca::im::Key(areca::im::Key_space));
+  areca::im::KeyEvent macroSpace(&macroBoundaryContext,
+                                 areca::im::Key(areca::im::Key_space));
   handler.handleKeyEvent(macroSpace);
   assert(!macroSpace.accepted());
   assert(macroBoundaryContext.deletes.empty());
@@ -245,13 +251,14 @@ int main() {
   TestInputContext noSurroundingContext(manager);
   handler.activate(noSurroundingContext);
   for (const char key : std::string("as")) {
-    areca::im::KeyEvent keyEvent(&noSurroundingContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &noSurroundingContext, areca::im::Key(areca::im::Key::keySymFromUnicode(
+                                   static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
     assert(keyEvent.accepted());
   }
-  areca::im::KeyEvent firstSpace(&noSurroundingContext, areca::im::Key(areca::im::Key_space));
+  areca::im::KeyEvent firstSpace(&noSurroundingContext,
+                                 areca::im::Key(areca::im::Key_space));
   handler.handleKeyEvent(firstSpace);
   assert(firstSpace.accepted());
   assert(noSurroundingContext.commits == std::vector<std::string>{"á "});
@@ -264,33 +271,33 @@ int main() {
 
   for (int index = 0; index < 2; ++index) {
     areca::im::KeyEvent extraSpace(&noSurroundingContext,
-                               areca::im::Key(areca::im::Key_space));
+                                   areca::im::Key(areca::im::Key_space));
     handler.handleKeyEvent(extraSpace);
     assert(!extraSpace.accepted());
   }
   for (int index = 0; index < 2; ++index) {
     areca::im::KeyEvent crossSpace(&noSurroundingContext,
-                               areca::im::Key(areca::im::Key_BackSpace));
+                                   areca::im::Key(areca::im::Key_BackSpace));
     handler.handleKeyEvent(crossSpace);
     assert(!crossSpace.accepted());
     assert(noSurroundingContext.propertyFor(&factory)->composing.empty());
   }
   areca::im::KeyEvent restoreWord(&noSurroundingContext,
-                              areca::im::Key(areca::im::Key_BackSpace));
+                                  areca::im::Key(areca::im::Key_BackSpace));
   handler.handleKeyEvent(restoreWord);
   assert(restoreWord.accepted());
   assert(noSurroundingContext.propertyFor(&factory)->finalizedWordRecovery ==
          areca::FinalizedWordRecoveryState::AwaitingBackspaceRelease);
-  areca::im::KeyEvent restoreWordRelease(&noSurroundingContext,
-                                     areca::im::Key(areca::im::Key_BackSpace), true);
+  areca::im::KeyEvent restoreWordRelease(
+      &noSurroundingContext, areca::im::Key(areca::im::Key_BackSpace), true);
   handler.handleKeyEvent(restoreWordRelease);
   assert(restoreWordRelease.accepted());
   assert(requestedBackspaces == 2);
   assert(eraseDone);
   assert(noSurroundingContext.propertyFor(&factory)->finalizedWordRecovery ==
          areca::FinalizedWordRecoveryState::Erasing);
-  areca::im::KeyEvent injectedBackspace(&noSurroundingContext,
-                                    areca::im::Key(areca::im::Key_BackSpace));
+  areca::im::KeyEvent injectedBackspace(
+      &noSurroundingContext, areca::im::Key(areca::im::Key_BackSpace));
   handler.handleKeyEvent(injectedBackspace);
   assert(!injectedBackspace.accepted());
   assert(noSurroundingContext.propertyFor(&factory)->finalizedWordRecovery ==
@@ -320,29 +327,30 @@ int main() {
   multipleSpacesContext.surroundingText().setText("", 0, 0);
   handler.activate(multipleSpacesContext);
   for (const char key : std::string("as")) {
-    areca::im::KeyEvent keyEvent(&multipleSpacesContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &multipleSpacesContext,
+        areca::im::Key(areca::im::Key::keySymFromUnicode(
+            static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
   }
   areca::im::KeyEvent committedSpace(&multipleSpacesContext,
-                                 areca::im::Key(areca::im::Key_space));
+                                     areca::im::Key(areca::im::Key_space));
   handler.handleKeyEvent(committedSpace);
   assert(committedSpace.accepted());
   for (int index = 0; index < 2; ++index) {
     areca::im::KeyEvent extraSpace(&multipleSpacesContext,
-                               areca::im::Key(areca::im::Key_space));
+                                   areca::im::Key(areca::im::Key_space));
     handler.handleKeyEvent(extraSpace);
     assert(!extraSpace.accepted());
   }
   for (int index = 0; index < 2; ++index) {
     areca::im::KeyEvent crossSpace(&multipleSpacesContext,
-                               areca::im::Key(areca::im::Key_BackSpace));
+                                   areca::im::Key(areca::im::Key_BackSpace));
     handler.handleKeyEvent(crossSpace);
     assert(!crossSpace.accepted());
   }
-  areca::im::KeyEvent restoreAfterSpaces(&multipleSpacesContext,
-                                     areca::im::Key(areca::im::Key_BackSpace));
+  areca::im::KeyEvent restoreAfterSpaces(
+      &multipleSpacesContext, areca::im::Key(areca::im::Key_BackSpace));
   handler.handleKeyEvent(restoreAfterSpaces);
   assert(restoreAfterSpaces.accepted());
   areca::im::KeyEvent restoreAfterSpacesRelease(
@@ -360,13 +368,13 @@ int main() {
   TestInputContext heldBackspaceContext(manager);
   handler.activate(heldBackspaceContext);
   for (const char key : std::string("as ")) {
-    areca::im::KeyEvent keyEvent(&heldBackspaceContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &heldBackspaceContext, areca::im::Key(areca::im::Key::keySymFromUnicode(
+                                   static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
   }
   areca::im::KeyEvent heldPress(&heldBackspaceContext,
-                            areca::im::Key(areca::im::Key_BackSpace));
+                                areca::im::Key(areca::im::Key_BackSpace));
   handler.handleKeyEvent(heldPress);
   assert(heldPress.accepted());
   areca::im::KeyEvent heldRepeat(
@@ -385,9 +393,10 @@ int main() {
   TestInputContext immediateCommitContext(manager);
   handler.activate(immediateCommitContext);
   for (const char key : std::string("as b")) {
-    areca::im::KeyEvent keyEvent(&immediateCommitContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &immediateCommitContext,
+        areca::im::Key(areca::im::Key::keySymFromUnicode(
+            static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
     assert(keyEvent.accepted());
   }
@@ -399,14 +408,15 @@ int main() {
   TestInputContext recoveryContext(manager);
   handler.activate(recoveryContext);
   for (const char key : std::string("nhanhsh")) {
-    areca::im::KeyEvent keyEvent(&recoveryContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &recoveryContext, areca::im::Key(areca::im::Key::keySymFromUnicode(
+                              static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
     assert(keyEvent.accepted());
   }
   assert(recoveryContext.propertyFor(&factory)->composing == "nhanhsh");
-  areca::im::KeyEvent recover(&recoveryContext, areca::im::Key(areca::im::Key_BackSpace));
+  areca::im::KeyEvent recover(&recoveryContext,
+                              areca::im::Key(areca::im::Key_BackSpace));
   handler.handleKeyEvent(recover);
   assert(recover.accepted());
   assert(recoveryContext.propertyFor(&factory)->composing == "nhánh");
@@ -416,9 +426,10 @@ int main() {
   TestInputContext recoveryRepeatContext(manager);
   handler.activate(recoveryRepeatContext);
   for (const char key : std::string("nhanhsh")) {
-    areca::im::KeyEvent keyEvent(&recoveryRepeatContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &recoveryRepeatContext,
+        areca::im::Key(areca::im::Key::keySymFromUnicode(
+            static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
   }
   areca::im::KeyEvent recoveryRepeat(
@@ -434,20 +445,22 @@ int main() {
 
   // IBus không gắn Repeat: nhấn giữ hủy khôi phục từ đã commit.
   {
-    TestInputContext ibusContext(manager, "ibus");
+    TestInputContext ibusContext(manager);
     handler.activate(ibusContext);
     auto *ibusState = ibusContext.propertyFor(&factory);
     for (const char key : std::string("as ")) {
-      areca::im::KeyEvent typed(&ibusContext,
-                            areca::im::Key(areca::im::Key::keySymFromUnicode(key)));
+      areca::im::KeyEvent typed(
+          &ibusContext, areca::im::Key(areca::im::Key::keySymFromUnicode(key)));
       handler.handleKeyEvent(typed);
     }
     const auto erasuresBefore = requestedBackspaces;
-    areca::im::KeyEvent press(&ibusContext, areca::im::Key(areca::im::Key_BackSpace));
+    areca::im::KeyEvent press(&ibusContext,
+                              areca::im::Key(areca::im::Key_BackSpace));
     handler.handleKeyEvent(press);
     assert(press.accepted());
     for (int i = 0; i < 3; ++i) {
-      areca::im::KeyEvent repeat(&ibusContext, areca::im::Key(areca::im::Key_BackSpace));
+      areca::im::KeyEvent repeat(&ibusContext,
+                                 areca::im::Key(areca::im::Key_BackSpace));
       handler.handleKeyEvent(repeat);
       assert(!repeat.accepted());
       assert(ibusState->composing.empty());
@@ -455,7 +468,8 @@ int main() {
       assert(ibusState->finalizedWordRecovery ==
              areca::FinalizedWordRecoveryState::Idle);
     }
-    areca::im::KeyEvent release(&ibusContext, areca::im::Key(areca::im::Key_BackSpace), true);
+    areca::im::KeyEvent release(&ibusContext,
+                                areca::im::Key(areca::im::Key_BackSpace), true);
     handler.handleKeyEvent(release);
     assert(!release.accepted());
     assert(requestedBackspaces == erasuresBefore);
@@ -463,16 +477,18 @@ int main() {
 
     // Release phải kết thúc lần nhấn giữ để lần gõ sau recovery bình thường.
     for (const char key : std::string("nhanhsh")) {
-      areca::im::KeyEvent typed(&ibusContext,
-                            areca::im::Key(areca::im::Key::keySymFromUnicode(key)));
+      areca::im::KeyEvent typed(
+          &ibusContext, areca::im::Key(areca::im::Key::keySymFromUnicode(key)));
       handler.handleKeyEvent(typed);
     }
-    areca::im::KeyEvent tap(&ibusContext, areca::im::Key(areca::im::Key_BackSpace));
+    areca::im::KeyEvent tap(&ibusContext,
+                            areca::im::Key(areca::im::Key_BackSpace));
     handler.handleKeyEvent(tap);
     assert(tap.accepted());
     assert(ibusState->composing == "nhánh");
     // Press tiếp theo vẫn sửa trong preedit, không ép commit ra ứng dụng.
-    areca::im::KeyEvent secondTap(&ibusContext, areca::im::Key(areca::im::Key_BackSpace));
+    areca::im::KeyEvent secondTap(&ibusContext,
+                                  areca::im::Key(areca::im::Key_BackSpace));
     handler.handleKeyEvent(secondTap);
     assert(secondTap.accepted());
     assert(!ibusState->composing.empty());
@@ -483,13 +499,14 @@ int main() {
   TestInputContext plainBackspaceContext(manager);
   handler.activate(plainBackspaceContext);
   for (const char key : std::string("nhanhsh")) {
-    areca::im::KeyEvent keyEvent(&plainBackspaceContext,
-                             areca::im::Key(areca::im::Key::keySymFromUnicode(
-                                 static_cast<unsigned char>(key))));
+    areca::im::KeyEvent keyEvent(
+        &plainBackspaceContext,
+        areca::im::Key(areca::im::Key::keySymFromUnicode(
+            static_cast<unsigned char>(key))));
     handler.handleKeyEvent(keyEvent);
   }
   areca::im::KeyEvent plainBackspace(&plainBackspaceContext,
-                                 areca::im::Key(areca::im::Key_BackSpace));
+                                     areca::im::Key(areca::im::Key_BackSpace));
   handler.handleKeyEvent(plainBackspace);
   assert(plainBackspace.accepted());
   assert(plainBackspaceContext.propertyFor(&factory)->composing == "nhanhs");
