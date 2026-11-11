@@ -1,0 +1,48 @@
+pkgname=ibus-areca
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Areca Vietnamese input method for IBus'
+arch=('x86_64')
+url='https://github.com/xhkzeroone/ibus-areca'
+license=('MIT')
+depends=(
+  'ibus'
+  'glib2'
+  'libxkbcommon'
+  'gtk4'
+  'python'
+  'python-gobject'
+  'gdk-pixbuf2'
+  'libinput'
+  'libei'
+  'libportal'
+  'systemd-libs'
+  'dbus'
+  'libx11'
+  'libxtst'
+)
+makedepends=(
+  'cmake'
+  'go'
+  'ninja'
+  'pkgconf'
+)
+source=("${pkgname}-${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cmake -S "${srcdir}/${pkgname}-${pkgver}" -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBEXECDIR=lib/ibus \
+    -DBUILD_TESTING=ON
+  cmake --build build --parallel
+}
+
+check() {
+  ctest --test-dir build --output-on-failure
+}
+
+package() {
+  DESTDIR="${pkgdir}" cmake --install build --strip
+}

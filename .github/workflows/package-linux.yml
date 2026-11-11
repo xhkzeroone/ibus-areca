@@ -1,0 +1,543 @@
+name: Build Linux packages
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+      - "[0-9]*"
+
+concurrency:
+  group: package-linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-24.04
+    outputs:
+      value: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve package version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(sed -nE \
+              's/^project\(ibus-areca VERSION ([^ ]+) .*/\1/p' \
+              CMakeLists.txt)"
+          fi
+          if [[ -z "$version" ]]; then
+            echo "Could not resolve the ibus-areca package version" >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+  ubuntu:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 24.04
+            runner: ubuntu-24.04
+            package_suffix: ubuntu24
+            artifact_name: ibus-areca-ubuntu24-deb
+          - name: Ubuntu 26.04
+            runner: ubuntu-26.04
+            package_suffix: ubuntu26
+            artifact_name: ibus-areca-ubuntu26-deb
+          - name: Linux Mint 22
+            runner: ubuntu-24.04
+            package_suffix: mint22
+            artifact_name: ibus-areca-mint22-deb
+    env:
+      VERSION: ${{ needs.version.outputs.value }}
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Ubuntu build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            golang-go \
+            ruby \
+            ruby-dev \
+            ibus \
+            libibus-1.0-dev \
+            libglib2.0-dev \
+            libxkbcommon-dev \
+            libdbus-1-dev \
+            libei-dev \
+            libinput-dev \
+            libportal-dev \
+            libudev-dev \
+            libx11-dev \
+            libxtst-dev
+          sudo gem install --no-document fpm
+
+      - name: Build and test
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-pkg -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DBUILD_TESTING=ON
+          cmake --build build-pkg --parallel
+          test -x build-pkg/ibus-engine-areca
+          ctest --test-dir build-pkg --output-on-failure
+
+      - name: Package DEB
+        run: |
+          set -euo pipefail
+          mkdir -p pkgroot dist
+          DESTDIR="$PWD/pkgroot" cmake --install build-pkg --strip
+          fpm -s dir -t deb \
+            -n ibus-areca \
+            -v "$VERSION" \
+            --architecture amd64 \
+            --description "Areca Vietnamese input method for IBus" \
+            --url "https://github.com/xhkzeroone/ibus-areca" \
+            --license MIT \
+            --depends ibus \
+            --depends python3 \
+            --depends python3-gi \
+            --depends gir1.2-gtk-4.0 \
+            --depends gir1.2-gdkpixbuf-2.0 \
+            --depends libdbus-1-3 \
+            --depends libei1 \
+            --depends libinput10 \
+            --depends libportal1 \
+            --depends libudev1 \
+            --depends libx11-6 \
+            --depends libxkbcommon0 \
+            --depends libxtst6 \
+            -C pkgroot \
+            -p "dist/ibus-areca_${VERSION}_${{ matrix.package_suffix }}_amd64.deb" \
+            .
+          dpkg-deb -c \
+            "dist/ibus-areca_${VERSION}_${{ matrix.package_suffix }}_amd64.deb"
+
+          if [[ "${{ matrix.package_suffix }}" == "ubuntu24" ]]; then
+            cp "dist/ibus-areca_${VERSION}_ubuntu24_amd64.deb" \
+               "dist/ibus-areca_${VERSION}_popos24_amd64.deb"
+            cp "dist/ibus-areca_${VERSION}_ubuntu24_amd64.deb" \
+               "dist/ibus-areca_${VERSION}_zorin17_amd64.deb"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/*.deb
+          if-no-files-found: error
+
+  ubuntu25:
+    name: Ubuntu 25.10
+    runs-on: ubuntu-24.04
+    needs: version
+    env:
+      VERSION: ${{ needs.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build, test and package in Ubuntu 25.10
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm \
+            -e VERSION="$VERSION" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -v "$PWD:/work" \
+            -w /work \
+            ubuntu:25.10 \
+            bash -lc '
+              set -euo pipefail
+              apt-get update
+              apt-get install -y \
+                build-essential \
+                cmake \
+                ninja-build \
+                pkg-config \
+                golang-go \
+                ruby \
+                ruby-dev \
+                ibus \
+                libibus-1.0-dev \
+                libglib2.0-dev \
+                libxkbcommon-dev \
+                libdbus-1-dev \
+                libei-dev \
+                libinput-dev \
+                libportal-dev \
+                libudev-dev \
+                libx11-dev \
+                libxtst-dev
+              gem install --no-document fpm
+
+              cmake -S . -B build-pkg-ubuntu25 -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/usr \
+                -DBUILD_TESTING=ON
+              cmake --build build-pkg-ubuntu25 --parallel
+              test -x build-pkg-ubuntu25/ibus-engine-areca
+              ctest --test-dir build-pkg-ubuntu25 --output-on-failure
+
+              mkdir -p pkgroot-ubuntu25
+              DESTDIR="$PWD/pkgroot-ubuntu25" \
+                cmake --install build-pkg-ubuntu25 --strip
+              fpm -s dir -t deb \
+                -n ibus-areca \
+                -v "$VERSION" \
+                --architecture amd64 \
+                --description "Areca Vietnamese input method for IBus" \
+                --url "https://github.com/xhkzeroone/ibus-areca" \
+                --license MIT \
+                --depends ibus \
+                --depends python3 \
+                --depends python3-gi \
+                --depends gir1.2-gtk-4.0 \
+                --depends gir1.2-gdkpixbuf-2.0 \
+                --depends libdbus-1-3 \
+                --depends libei1 \
+                --depends libinput10 \
+                --depends libportal1 \
+                --depends libudev1 \
+                --depends libx11-6 \
+                --depends libxkbcommon0 \
+                --depends libxtst6 \
+                -C pkgroot-ubuntu25 \
+                -p "dist/ibus-areca_${VERSION}_ubuntu25_amd64.deb" \
+                .
+              dpkg-deb -c \
+                "dist/ibus-areca_${VERSION}_ubuntu25_amd64.deb"
+            '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ibus-areca-ubuntu25-deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  arch:
+    name: Arch Linux rolling
+    runs-on: ubuntu-24.04
+    needs: version
+    env:
+      VERSION: ${{ needs.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Create source archive including Bamboo
+        run: |
+          set -euo pipefail
+          mkdir -p arch-pkg dist
+          git ls-files --recurse-submodules -z | \
+            tar --null --files-from=- --create --gzip \
+              --transform="s,^,ibus-areca-${VERSION}/," \
+              --file="arch-pkg/ibus-areca-${VERSION}.tar.gz"
+          cp packaging/arch/PKGBUILD arch-pkg/PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" arch-pkg/PKGBUILD
+
+      - name: Build and test Pacman package in Arch Linux
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            archlinux:latest \
+            bash -lc '
+              set -euo pipefail
+              pacman -Syu --noconfirm
+              pacman -S --needed --noconfirm \
+                base-devel \
+                cmake \
+                go \
+                ibus \
+                glib2 \
+                libxkbcommon \
+                gtk4 \
+                python \
+                python-gobject \
+                gdk-pixbuf2 \
+                libei \
+                libinput \
+                libportal \
+                ninja \
+                pkgconf \
+                libx11 \
+                libxtst \
+                systemd-libs \
+                dbus
+              useradd --create-home builder
+              chown -R builder:builder arch-pkg
+              su builder -c \
+                "cd /work/arch-pkg && makepkg --noconfirm --check"
+              mv arch-pkg/*.pkg.tar.zst dist/
+              for f in dist/ibus-areca-*.pkg.tar.zst; do
+                [[ -f "$f" ]] || continue
+                cp "$f" "${f%.pkg.tar.zst}.cachyos.pkg.tar.zst"
+                cp "$f" "${f%.pkg.tar.zst}.manjaro.pkg.tar.zst"
+                cp "$f" "${f%.pkg.tar.zst}.endeavouros.pkg.tar.zst"
+                cp "$f" "${f%.pkg.tar.zst}.garuda.pkg.tar.zst"
+                break
+              done
+            '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ibus-areca-arch-pacman
+          path: dist/*.pkg.tar.zst
+          if-no-files-found: error
+
+  fedora:
+    name: Fedora ${{ matrix.version }}
+    runs-on: ubuntu-24.04
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["44", "43", "42"]
+    env:
+      VERSION: ${{ needs.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build, test and package in Fedora ${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm \
+            -e VERSION="$VERSION" \
+            -v "$PWD:/work" \
+            -w /work \
+            fedora:${{ matrix.version }} \
+            bash -lc '
+              set -euo pipefail
+              dnf install -y \
+                gcc-c++ \
+                make \
+                cmake \
+                ninja-build \
+                pkgconf-pkg-config \
+                golang \
+                ruby \
+                ruby-devel \
+                rpm-build \
+                ibus \
+                ibus-devel \
+                glib2-devel \
+                libxkbcommon-devel \
+                dbus-devel \
+                libei-devel \
+                libinput-devel \
+                libportal-devel \
+                systemd-devel \
+                libX11-devel \
+                libXtst-devel
+              gem install --no-document fpm
+
+              cmake -S . -B build-pkg-fedora -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/usr \
+                -DBUILD_TESTING=ON
+              cmake --build build-pkg-fedora --parallel
+              test -x build-pkg-fedora/ibus-engine-areca
+              ctest --test-dir build-pkg-fedora --output-on-failure
+
+              mkdir -p pkgroot-fedora
+              DESTDIR="$PWD/pkgroot-fedora" \
+                cmake --install build-pkg-fedora --strip
+              fpm -s dir -t rpm \
+                -n ibus-areca \
+                -v "$VERSION" \
+                --architecture x86_64 \
+                --description "Areca Vietnamese input method for IBus" \
+                --url "https://github.com/xhkzeroone/ibus-areca" \
+                --license MIT \
+                --depends ibus \
+                --depends python3 \
+                --depends python3-gobject \
+                --depends gtk4 \
+                --depends gdk-pixbuf2 \
+                --depends dbus-libs \
+                --depends libei \
+                --depends libinput \
+                --depends libportal \
+                --depends systemd-libs \
+                --depends libX11 \
+                --depends libXtst \
+                --depends libxkbcommon \
+                -C pkgroot-fedora \
+                -p "dist/ibus-areca-${VERSION}.fedora${{ matrix.version }}.x86_64.rpm" \
+                .
+              rpm -qpl \
+                "dist/ibus-areca-${VERSION}.fedora${{ matrix.version }}.x86_64.rpm"
+
+              if [[ "${{ matrix.version }}" == "44" ]]; then
+                cp "dist/ibus-areca-${VERSION}.fedora44.x86_64.rpm" \
+                   "dist/ibus-areca-${VERSION}.nobara.x86_64.rpm"
+                cp "dist/ibus-areca-${VERSION}.fedora44.x86_64.rpm" \
+                   "dist/ibus-areca-${VERSION}.bazzite.x86_64.rpm"
+              fi
+            '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ibus-areca-fedora${{ matrix.version }}-rpm
+          path: dist/*.rpm
+          if-no-files-found: error
+
+  opensuse:
+    name: openSUSE Tumbleweed
+    runs-on: ubuntu-24.04
+    needs: version
+    env:
+      VERSION: ${{ needs.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build, test and package in openSUSE Tumbleweed
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm \
+            -e VERSION="$VERSION" \
+            -v "$PWD:/work" \
+            -w /work \
+            opensuse/tumbleweed:latest \
+            bash -lc '
+              set -euo pipefail
+              zypper --non-interactive refresh
+              zypper --non-interactive install -y --no-recommends \
+                gcc-c++ \
+                make \
+                cmake \
+                ninja \
+                pkgconf-pkg-config \
+                go \
+                ruby \
+                ruby-devel \
+                rpm-build \
+                ibus \
+                ibus-devel \
+                glib2-devel \
+                libxkbcommon-devel \
+                dbus-1-devel \
+                libinput-devel \
+                systemd-devel \
+                libX11-devel \
+                libXtst-devel \
+                libei-devel \
+                libportal-devel
+              gem install --no-document --bindir /usr/local/bin fpm
+              fpm_script="$(ruby -rrubygems -e "puts Gem::Specification.find_by_name(%q[fpm]).full_gem_path")/bin/fpm"
+              if [[ ! -f "$fpm_script" ]]; then
+                echo "fpm script not found: $fpm_script" >&2
+                gem env >&2
+                exit 1
+              fi
+
+              cmake -S . -B build-pkg-opensuse -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/usr \
+                -DBUILD_TESTING=ON
+              cmake --build build-pkg-opensuse --parallel
+              test -x build-pkg-opensuse/ibus-engine-areca
+              ctest --test-dir build-pkg-opensuse --output-on-failure
+
+              mkdir -p pkgroot-opensuse
+              DESTDIR="$PWD/pkgroot-opensuse" \
+                cmake --install build-pkg-opensuse --strip
+              ruby "$fpm_script" -s dir -t rpm \
+                -n ibus-areca \
+                -v "$VERSION" \
+                --architecture x86_64 \
+                --description "Areca Vietnamese input method for IBus" \
+                --url "https://github.com/xhkzeroone/ibus-areca" \
+                --license MIT \
+                --depends ibus \
+                --depends python3 \
+                --depends python3-gobject \
+                --depends python3-gobject-Gdk \
+                --depends typelib-1_0-Gtk-4_0 \
+                --depends libgtk-4-1 \
+                --depends typelib-1_0-GdkPixbuf-2_0 \
+                --depends libdbus-1-3 \
+                --depends libinput10 \
+                --depends libX11-6 \
+                --depends libXtst6 \
+                --depends libxkbcommon0 \
+                -C pkgroot-opensuse \
+                -p "dist/ibus-areca-${VERSION}.opensuse-tumbleweed.x86_64.rpm" \
+                .
+              rpm -qpl \
+                "dist/ibus-areca-${VERSION}.opensuse-tumbleweed.x86_64.rpm"
+            '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ibus-areca-opensuse-rpm
+          path: dist/*.rpm
+          if-no-files-found: error
+
+  release:
+    name: Publish tagged release
+    runs-on: ubuntu-24.04
+    needs:
+      - ubuntu
+      - ubuntu25
+      - arch
+      - fedora
+      - opensuse
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Upload packages to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes "ibus-areca packages for Arch Linux, CachyOS, Manjaro, EndeavourOS, Garuda, Ubuntu, Pop!_OS, Linux Mint, Zorin OS, Fedora, Nobara, Bazzite, and openSUSE."
+          fi
+          find artifacts -type f -print0 | \
+            xargs -0 gh release upload "$tag" --clobber
