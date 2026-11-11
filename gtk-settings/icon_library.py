@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -83,7 +85,33 @@ def prepare_icon(source: Path, target: str) -> tuple[str, Path]:
         if not success:
             raise ValueError("Không tạo được kích thước biểu tượng")
         atomic_write(data_home() / f"icons/hicolor/{size}x{size}/apps/{name}.png", data)
+    refresh_icon_theme()
     return name, data_home() / f"icons/hicolor/256x256/apps/{name}.png"
+
+
+def refresh_icon_theme() -> None:
+    """Báo cho GTK và GNOME Shell biết theme icon của người dùng vừa có icon mới.
+
+    Icon theme chỉ quét lại khi mtime của chính thư mục theme đổi hoặc cache
+    được dựng lại; ghi file vào thư mục con như 256x256/apps không đổi mtime
+    đó, nên Shell vẫn giữ danh sách cũ tới lần đăng nhập sau.
+    """
+    theme = data_home() / "icons/hicolor"
+    if not theme.is_dir():
+        return
+    # Cache cũ che mất icon mới, nên có cache thì phải dựng lại.
+    if (theme / "icon-theme.cache").exists():
+        tool = shutil.which("gtk-update-icon-cache") or shutil.which("gtk4-update-icon-cache")
+        if tool:
+            try:
+                subprocess.run([tool, "-f", "-t", "-q", str(theme)], check=False, timeout=10,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+    try:
+        os.utime(theme, None)
+    except OSError:
+        pass
 
 
 def desktop_entry(icon_name: str) -> tuple[Path, bytes]:

@@ -46,6 +46,14 @@ class IconLibraryTests(unittest.TestCase):
         self.assertEqual(pixels[128 * 4 + 3], 0)
         self.assertEqual(pixels[128 * stride + 128 * 4 + 3], 255)
 
+    def test_export_bumps_theme_directory_mtime(self):
+        theme = self.root / 'data/icons/hicolor'
+        theme.mkdir(parents=True)
+        old = 1_000_000_000
+        os.utime(theme, (old, old))
+        prepare_icon(PRESETS['cat'][1], 'Settings')
+        self.assertGreater(theme.stat().st_mtime, old)
+
     def test_rejects_corrupt_or_oversize_files_before_export(self):
         source = self.root / 'invalid.png'
         source.write_bytes(b'not an image')
