@@ -37,17 +37,24 @@ add_dependencies(areca-bamboo areca-bamboo-bridge)
 # Phần logic không phụ thuộc IBus, dùng chung cho engine và test.
 add_library(areca-core STATIC
     src/bamboo_engine_adapter.cpp
+    src/config.cpp
+    src/forward_backspace_backend.cpp
+    src/input_scheduler.cpp
     src/program_compatibility.cpp
+    src/rewrite_mode.cpp
 )
 target_include_directories(areca-core PUBLIC src)
 target_compile_options(areca-core PRIVATE -Wall -Wextra -Wpedantic)
 find_package(Threads REQUIRED)
-target_link_libraries(areca-core PUBLIC areca-bamboo Threads::Threads)
+target_link_libraries(areca-core PUBLIC areca-bamboo Threads::Threads PkgConfig::GLIB)
 
 if(BUILD_TESTING)
     foreach(name
             bamboo_engine_adapter_test
-            program_compatibility_test)
+            config_test
+            input_scheduler_test
+            program_compatibility_test
+            rewrite_mode_test)
         add_executable(${name} tests/${name}.cpp)
         target_compile_options(${name} PRIVATE -Wall -Wextra -Wpedantic -UNDEBUG)
         target_link_libraries(${name} PRIVATE areca-core)
