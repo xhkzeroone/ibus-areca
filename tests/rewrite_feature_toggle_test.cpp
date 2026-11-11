@@ -641,23 +641,6 @@ int main() {
   assert(!advancedConfig.useXTestInsteadOfUinput.value());
   assert(advancedConfig.surroundingProbeTimeoutMs.value() == 80);
 
-  advancedConfig.backspaceDelayMs.setValue(27);
-  advancedConfig.uinputShiftSelectDelayMs.setValue(28);
-  advancedConfig.surroundingWaitMs.setValue(29);
-  advancedConfig.xtestBackspaceDelayMs.setValue(30);
-  advancedConfig.afterBackspaceWaitMs.setValue(31);
-  advancedConfig.afterUinputShiftSelectWaitMs.setValue(32);
-  advancedConfig.afterXTestBackspaceWaitMs.setValue(33);
-  areca::applyBestPerformancePreset(advancedConfig);
-  assert(advancedConfig.backspaceDelayMs.value() == 27);
-  assert(advancedConfig.afterBackspaceWaitMs.value() == 5);
-  assert(advancedConfig.uinputShiftSelectDelayMs.value() == 28);
-  assert(advancedConfig.afterUinputShiftSelectWaitMs.value() == 5);
-  assert(advancedConfig.surroundingWaitMs.value() == 1);
-  assert(advancedConfig.surroundingDeleteDelayMs.value() == 1);
-  assert(advancedConfig.afterSurroundingDeleteWaitMs.value() == 1);
-  assert(advancedConfig.xtestBackspaceDelayMs.value() == 30);
-  assert(advancedConfig.afterXTestBackspaceWaitMs.value() == 5);
 
   areca::ArecaConfig mainConfig;
   assert(!mainConfig.shiftSelectFallbackForBrowser.value());

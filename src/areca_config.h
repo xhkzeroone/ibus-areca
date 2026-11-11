@@ -212,19 +212,6 @@ ARECA_CONFIGURATION(
         this, "ForwardFirstCharacter",
         N_("Chuyển tiếp phím đầu để tương thích trình duyệt"), true};);
 
-inline void applyBestPerformancePreset(AdvancedConfig &config) {
-  constexpr int rewriteWaitMs = 5;
-  constexpr int surroundingWaitMs = 1;
-
-  config.afterBackspaceWaitMs.setValue(rewriteWaitMs);
-  config.afterUinputShiftSelectWaitMs.setValue(rewriteWaitMs);
-  config.afterXTestBackspaceWaitMs.setValue(rewriteWaitMs);
-
-  config.surroundingWaitMs.setValue(surroundingWaitMs);
-  config.surroundingDeleteDelayMs.setValue(surroundingWaitMs);
-  config.afterSurroundingDeleteWaitMs.setValue(surroundingWaitMs);
-}
-
 ARECA_CONFIGURATION(
     ArecaConfig,
     im::HiddenOption<PresentationMode> presentationMode{

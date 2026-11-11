@@ -389,9 +389,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.icon_label: Gtk.Label | None = None
         self.navigation: dict[str, Gtk.ToggleButton] = {}
         self.pages: dict[str, Gtk.Widget] = {}
-        self.advanced_spins: dict[str, Gtk.SpinButton] = {}
         self.shortcut_capture: tuple[Gtk.Entry, Gtk.Button, Gtk.EventControllerKey] | None = None
-        self._applying_preset = False
         self._toast_timeout_id = 0
         self.status_label = Gtk.Label(xalign=0)
         self.status_label.add_css_class("dim-label")
@@ -774,7 +772,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         control.set_valign(Gtk.Align.CENTER)
         control.set_width_chars(5)
         control.connect("value-changed", self._on_spin, key)
-        self.advanced_spins[key] = control
         row.append(control)
 
     def _build_overview(self) -> Gtk.Widget:
@@ -1161,12 +1158,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
             ("Chuyển tiếp phím đầu cho trình duyệt", "ForwardFirstCharacter"),
         ]:
             self._switch_doc(compat, title, self.store.advanced, key)
-        preset = Gtk.Button(label="Áp dụng preset hiệu năng")
-        preset.set_margin_top(12)
-        preset.add_css_class("suggested-action")
-        preset.set_halign(Gtk.Align.START)
-        preset.connect("clicked", self._performance_preset)
-        content.append(preset)
         return page
 
     def _switch_doc(self, group: Gtk.Box, title: str, document: ConfigDocument, key: str) -> None:
@@ -1178,24 +1169,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         control.set_active(bool_value(value, default))
         control.connect("notify::active", self._on_switch, document, key)
         row.append(control)
-
-    def _performance_preset(self, _button: Gtk.Button) -> None:
-        preset_values = {
-                                                            "SurroundingWaitMs": 1,
-            "SurroundingDeleteDelayMs": 1,
-                    "AfterSurroundingDeleteWaitMs": 1,
-                                }
-        for key, value in preset_values.items():
-            self.store.advanced.set("", key, str(value))
-        self._applying_preset = True
-        try:
-            for key, value in preset_values.items():
-                spin = self.advanced_spins.get(key)
-                if spin is not None:
-                    spin.set_value(value)
-        finally:
-            self._applying_preset = False
-        self._save_and_report("Đã áp dụng preset hiệu năng", self.store.advanced)
 
     def _build_appearance(self) -> Gtk.Widget:
         page, content = self._page("Giao diện", "Chọn bảng màu cho cửa sổ cài đặt. Thay đổi được áp dụng và lưu ngay.")
@@ -1559,8 +1532,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
             self._save_and_report("Đã lưu cấu hình", document)
 
     def _on_spin(self, control: Gtk.SpinButton, key: str) -> None:
-        if self._applying_preset:
-            return
         self.store.advanced.set("", key, str(int(control.get_value())))
         self._save_and_report("Đã lưu cấu hình", self.store.advanced)
 
