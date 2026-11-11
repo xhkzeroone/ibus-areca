@@ -3,42 +3,107 @@
 #include <exception>
 #include <utility>
 
-#include "log.h"
+#include "im/im.h"
+
+#include "surrounding_text_cache.h"
 
 namespace areca {
 
-InputScheduler::InputScheduler(VietnameseEngine &engine, InputClient &client,
+InputScheduler::InputScheduler(im::EventLoop &eventLoop,
+                               EngineResolver engineResolver,
                                TimingProvider timingProvider,
                                DebugProvider debugProvider,
                                RewriteBackendSelector rewriteBackendSelector)
-    : engine_(engine), client_(client),
+    : eventLoop_(eventLoop), engineResolver_(std::move(engineResolver)),
       timingProvider_(std::move(timingProvider)),
       debugProvider_(std::move(debugProvider)),
       rewriteBackendSelector_(std::move(rewriteBackendSelector)) {}
 
-void InputScheduler::enqueue(uint32_t codepoint, std::string utf8Text) {
+void InputScheduler::enqueue(im::InputContext &inputContext,
+                             uint32_t codepoint, std::string utf8Text,
+                             bool suppressMacro) {
   QueuedKey key;
   key.sequence = nextSequence_++;
   key.codepoint = codepoint;
   key.utf8Text = std::move(utf8Text);
+  key.suppressMacro = suppressMacro;
+  key.inputContext = inputContext.watch();
   if (debugProvider_()) {
     ARECA_INFO() << "areca: queue push kind=text seq=" << key.sequence
                  << " text=" << key.utf8Text
+                 << " suppress_macro=" << key.suppressMacro
                  << " depth_before=" << queue_.size();
   }
-  queue_.push_back(std::move(key));
+  queue_.push(std::move(key));
   scheduleNext();
 }
 
-void InputScheduler::enqueueBackspace() {
+bool InputScheduler::handleIdleKey(im::KeyEvent &event, uint32_t codepoint,
+                                   const std::string &utf8Text) {
+  auto *inputContext = event.inputContext();
+  // Không cho phím vượt qua công việc đang chờ hoặc khoảng ổn định sau commit:
+  // editor phải nhận đủ kết quả rewrite trước khi nhận phím mới. Khi stalled,
+  // trạng thái editor chưa chắc đồng bộ nên cũng không được đi đường tắt này.
+  if (!inputContext || processing_ || rewritePending() || !queue_.empty() ||
+      stalled_ || shouldRejectReset()) {
+    return false;
+  }
+  auto *engine = engineResolver_(*inputContext);
+  // Chỉ áp dụng lúc chưa có từ đang ghép; phím trong từ vẫn cần luồng rewrite.
+  if (!engine || !engine->currentText().empty())
+    return false;
+
+  // Khóa scheduler trong lúc xử lý đồng bộ để tránh công việc khác chen vào.
+  processing_ = true;
+  activeTiming_ = timingProvider_(*inputContext);
+  try {
+    // Engine rỗng chưa đảm bảo đầu ra giống phím gốc (bảng mã/macro có thể đổi
+    // ký tự). Phải xem kết quả Bamboo trước khi quyết định bỏ filterAndAccept.
+    const auto result = engine->process(codepoint, utf8Text);
+    if (result.deleteCount == 0 && result.commitText == utf8Text &&
+        !result.macroExpanded) {
+      if (debugProvider_())
+        ARECA_INFO() << "areca: idle key route=forward reason=unchanged-output";
+      // Giữ trạng thái mới của Bamboo để a rồi s vẫn ghép thành á. Không commit
+      // thêm hoặc tự cập nhật surrounding cache vì frontend sẽ giao phím gốc.
+      // forward() của Fcitx là getter; chính việc không filter/accept event mới
+      // cho phím đi tiếp. Không tạo cặp phím giả bằng forwardKey ở đây.
+      event.forward();
+      if (commitObserver_) {
+        commitObserver_(*inputContext, 0, utf8Text);
+      }
+      // Dù không gọi commitString(), frontend vẫn sắp nhận một ký tự mới từ
+      // phím gốc. Giữ single-flight barrier như nhánh commit để phím kế tiếp
+      // không bắt đầu rewrite trước khi editor kịp nhận ký tự vừa forward.
+      finishKeyAfterDelay();
+    } else {
+      if (debugProvider_())
+        ARECA_INFO()
+            << "areca: idle key route=commit reason=transformed-output";
+      // Đầu ra đã đổi: chặn phím gốc và áp dụng chính kết quả vừa tính. Không
+      // enqueue lại vì như vậy Bamboo sẽ xử lý cùng một phím hai lần.
+      event.filterAndAccept();
+      applyResult(*inputContext, *engine, result, utf8Text);
+    }
+  } catch (const std::exception &error) {
+    ARECA_ERROR() << "areca: idle key processing failed: " << error.what();
+    engine->reset();
+    event.forward();
+    finishKey();
+  }
+  return true;
+}
+
+void InputScheduler::enqueueBackspace(im::InputContext &inputContext) {
   QueuedKey key;
   key.sequence = nextSequence_++;
   key.isBackspace = true;
+  key.inputContext = inputContext.watch();
   if (debugProvider_()) {
     ARECA_INFO() << "areca: queue push kind=backspace seq=" << key.sequence
                  << " depth_before=" << queue_.size();
   }
-  queue_.push_back(std::move(key));
+  queue_.push(std::move(key));
   scheduleNext();
 }
 
@@ -47,7 +112,7 @@ bool InputScheduler::shouldRejectReset() const {
     return true;
   }
   if (lastRewriteCompletionTimeUsec_ != 0) {
-    const uint64_t now = monotonicNowUsec();
+    const uint64_t now = im::now(CLOCK_MONOTONIC);
     if (now >= lastRewriteCompletionTimeUsec_ &&
         (now - lastRewriteCompletionTimeUsec_) <= kResetRejectWindowUsec) {
       return true;
@@ -56,29 +121,48 @@ bool InputScheduler::shouldRejectReset() const {
   return false;
 }
 
-bool InputScheduler::reset() {
+void InputScheduler::resetContext(im::InputContext &inputContext) {
   if (shouldRejectReset()) {
     if (debugProvider_()) {
       ARECA_INFO() << "areca: reset rejected (active rewrite or 50ms "
                       "post-commit window)";
     }
-    return false;
+    return;
   }
-  queue_.clear();
-  engine_.reset();
-  return true;
+
+  queue_.removeFor(inputContext);
+  if (auto *engine = engineResolver_(inputContext)) {
+    engine->reset();
+  }
+  scheduleNext();
 }
 
 void InputScheduler::scheduleNext() {
   if (processing_ || queue_.empty() || stalled_) {
     return;
   }
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: scheduler pump depth=" << queue_.size();
+  }
   processNext();
 }
 
 void InputScheduler::processNext() {
-  auto key = std::move(queue_.front());
-  queue_.pop_front();
+  if (processing_ || queue_.empty() || stalled_) {
+    return;
+  }
+
+  auto key = queue_.pop();
+  auto *inputContext = key.inputContext.get();
+  if (!inputContext) {
+    scheduleNext();
+    return;
+  }
+  auto *engine = engineResolver_(*inputContext);
+  if (!engine) {
+    scheduleNext();
+    return;
+  }
 
   processing_ = true;
   if (debugProvider_()) {
@@ -88,20 +172,26 @@ void InputScheduler::processNext() {
   }
   try {
     if (key.isBackspace) {
-      applyResult(engine_.processBackspace(), "");
+      applyResult(*inputContext, *engine, engine->processBackspace(), "");
     } else {
-      applyResult(engine_.process(key.codepoint, key.utf8Text), key.utf8Text);
+      const auto result =
+          key.suppressMacro
+              ? engine->processWithoutMacro(key.codepoint, key.utf8Text)
+              : engine->process(key.codepoint, key.utf8Text);
+      applyResult(*inputContext, *engine, result, key.utf8Text);
     }
   } catch (const std::exception &error) {
     ARECA_ERROR() << "areca: Bamboo processing failed: " << error.what();
-    engine_.reset();
+    engine->reset();
     finishKey();
   }
 }
 
-void InputScheduler::applyResult(const BambooResult &result,
+void InputScheduler::applyResult(im::InputContext &inputContext,
+                                 VietnameseEngine &engine,
+                                 const BambooResult &result,
                                  const std::string &rawText) {
-  activeTiming_ = timingProvider_();
+  activeTiming_ = timingProvider_(inputContext);
   if (debugProvider_()) {
     ARECA_INFO() << "areca: bamboo result current=" << result.currentText
                  << " new=" << result.newText
@@ -111,52 +201,98 @@ void InputScheduler::applyResult(const BambooResult &result,
                  << " spellcheck_restored=" << result.spellcheckRestored;
   }
   if (!result.deleteCount) {
-    // Phím gốc đã được nhận trước khi vào hàng đợi, nên mọi kết quả không cần
-    // xoá đều đi qua commit, kể cả khi bảng mã đổi ký tự.
+    // The original event was accepted before queueing, so every no-delete
+    // result is applied through the input-method protocol. This also covers
+    // output tables that transform a single key without replacing old text.
     if (!result.commitText.empty()) {
-      client_.commitText(result.commitText);
+      inputContext.commitString(result.commitText);
+      updateSurroundingCacheAfterCommit(inputContext, result.commitText);
       if (commitObserver_) {
-        commitObserver_(0, result.commitText);
+        commitObserver_(inputContext, 0, result.commitText);
       }
     }
     if (debugProvider_()) {
       ARECA_INFO() << "areca: apply no-delete commit=" << result.commitText
-                   << " raw=" << rawText;
+                   << " raw=" << rawText
+                   << " transformed=" << (result.commitText != rawText);
     }
     finishKeyAfterCommit();
     return;
   }
 
+  const auto &timing = activeTiming_;
   RewritePlan plan;
   plan.transactionId = nextTransactionId_++;
-  plan.backspaceCount = result.deleteCount;
-  plan.backspaceDelayMs = activeTiming_.backspaceDelayMs;
-  plan.afterBackspaceWaitMs = activeTiming_.afterBackspaceWaitMs;
+  plan.backspaceDelayMs = timing.backspaceDelayMs;
+  plan.uinputBackspaceAckTimeoutMs = timing.uinputBackspaceAckTimeoutMs;
+  plan.afterBackspaceWaitMs = timing.afterBackspaceWaitMs;
+  plan.waylandAfterBackspaceWaitMs = timing.waylandAfterBackspaceWaitMs;
+  plan.ximAfterBackspaceWaitMs = timing.ximAfterBackspaceWaitMs;
+  plan.fcitx4AfterBackspaceWaitMs = timing.fcitx4AfterBackspaceWaitMs;
+  plan.dbusAfterBackspaceWaitMs = timing.dbusAfterBackspaceWaitMs;
+  plan.ibusAfterBackspaceWaitMs = timing.ibusAfterBackspaceWaitMs;
+  plan.uinputShiftSelectDelayMs = timing.uinputShiftSelectDelayMs;
+  plan.uinputShiftSelectAckTimeoutMs = timing.uinputShiftSelectAckTimeoutMs;
+  plan.afterUinputShiftSelectWaitMs = timing.afterUinputShiftSelectWaitMs;
+  plan.waylandAfterUinputShiftSelectWaitMs =
+      timing.waylandAfterUinputShiftSelectWaitMs;
+  plan.ximAfterUinputShiftSelectWaitMs = timing.ximAfterUinputShiftSelectWaitMs;
+  plan.fcitx4AfterUinputShiftSelectWaitMs =
+      timing.fcitx4AfterUinputShiftSelectWaitMs;
+  plan.dbusAfterUinputShiftSelectWaitMs =
+      timing.dbusAfterUinputShiftSelectWaitMs;
+  plan.ibusAfterUinputShiftSelectWaitMs =
+      timing.ibusAfterUinputShiftSelectWaitMs;
+  plan.surroundingWaitMs = timing.surroundingWaitMs;
+  plan.surroundingProbeTimeoutMs = timing.surroundingProbeTimeoutMs;
+  plan.surroundingDeleteDelayMs = timing.surroundingDeleteDelayMs;
+  plan.waylandSurroundingDeleteDelayMs = timing.waylandSurroundingDeleteDelayMs;
+  plan.afterSurroundingDeleteWaitMs = timing.afterSurroundingDeleteWaitMs;
+  plan.xtestBackspaceDelayMs = timing.xtestBackspaceDelayMs;
+  plan.afterXTestBackspaceWaitMs = timing.afterXTestBackspaceWaitMs;
+  plan.waylandAfterXTestBackspaceWaitMs =
+      timing.waylandAfterXTestBackspaceWaitMs;
+  plan.ximAfterXTestBackspaceWaitMs = timing.ximAfterXTestBackspaceWaitMs;
+  plan.fcitx4AfterXTestBackspaceWaitMs = timing.fcitx4AfterXTestBackspaceWaitMs;
+  plan.dbusAfterXTestBackspaceWaitMs = timing.dbusAfterXTestBackspaceWaitMs;
+  plan.ibusAfterXTestBackspaceWaitMs = timing.ibusAfterXTestBackspaceWaitMs;
+  plan.timerAccuracyUsec = timing.timerAccuracyUsec;
   plan.commitText = result.commitText;
 
-  auto *backend = rewriteBackendSelector_(result);
-  if (!backend) {
+  const auto selection = rewriteBackendSelector_(inputContext, result);
+  if (!selection.backend) {
     ARECA_ERROR() << "areca: rewrite backend selector returned null";
-    engine_.reset();
+    engine.reset();
+    activeTransactionId_ = 0;
     finishKey();
     return;
   }
+  auto &backend = *selection.backend;
+  plan.backspaceCount = result.deleteCount + selection.additionalBackspaces;
+  plan.probeSurrounding = selection.probeSurrounding;
+  if (selection.surroundingProbeTimeoutMs > 0) {
+    plan.surroundingProbeTimeoutMs = selection.surroundingProbeTimeoutMs;
+  }
   if (debugProvider_()) {
-    ARECA_INFO() << "areca: rewrite select backend=" << backend->name()
+    ARECA_INFO() << "areca: rewrite select backend=" << backend.name()
                  << " tx=" << plan.transactionId
                  << " bamboo_delete=" << result.deleteCount
+                 << " additional_backspaces=" << selection.additionalBackspaces
+                 << " probe_timeout_ms=" << plan.surroundingProbeTimeoutMs
                  << " plan_backspaces=" << plan.backspaceCount;
   }
 
   activeTransactionId_ = plan.transactionId;
+  pendingCommitContext_ = inputContext.watch();
   pendingCommitDeleteCount_ = result.deleteCount;
   pendingCommitText_ = result.commitText;
-  const auto status = backend->apply(
-      client_, plan, [this](uint64_t transactionId, RewriteOutcome outcome) {
-        rewriteDone(transactionId, outcome);
-      });
+  const auto status =
+      backend.apply(inputContext, plan,
+                    [this](uint64_t transactionId, RewriteOutcome outcome) {
+                      rewriteDone(transactionId, outcome);
+                    });
   if (debugProvider_()) {
-    ARECA_INFO() << "areca: rewrite apply backend=" << backend->name()
+    ARECA_INFO() << "areca: rewrite apply backend=" << backend.name()
                  << " tx=" << plan.transactionId
                  << " status=" << static_cast<int>(status);
   }
@@ -166,9 +302,9 @@ void InputScheduler::applyResult(const BambooResult &result,
     finishKeyAfterCommit();
   } else if (status == ApplyStatus::Failed) {
     ARECA_ERROR() << "areca: rewrite backend failed tx=" << plan.transactionId
-                  << " backend=" << backend->name();
-    // Dừng hẳn: xử lý phím tiếp theo khi không biết ô nhập đang chứa gì có thể
-    // phá thứ tự phím.
+                  << " backend=" << backend.name();
+    // Fail closed because a backend failure leaves the application state
+    // unknown. Processing another key could violate ordering.
     stalled_ = true;
   }
 }
@@ -191,12 +327,16 @@ void InputScheduler::rewriteDone(uint64_t transactionId,
   }
   activeTransactionId_ = 0;
   notifyPendingCommit();
+  // Start the settle delay from the backend's actual completion barrier.
   finishKeyAfterCommit();
 }
 
 void InputScheduler::notifyPendingCommit() {
-  if (commitObserver_) {
-    commitObserver_(pendingCommitDeleteCount_, pendingCommitText_);
+  auto *inputContext = pendingCommitContext_.get();
+  pendingCommitContext_.unwatch();
+  if (inputContext && commitObserver_) {
+    commitObserver_(*inputContext, pendingCommitDeleteCount_,
+                    pendingCommitText_);
   }
   pendingCommitDeleteCount_ = 0;
   pendingCommitText_.clear();
@@ -208,17 +348,36 @@ void InputScheduler::finishKey() {
 }
 
 void InputScheduler::finishKeyAfterCommit() {
-  lastRewriteCompletionTimeUsec_ = monotonicNowUsec();
-  const uint32_t delayMs = activeTiming_.postCommitDelayMs;
+  lastRewriteCompletionTimeUsec_ = im::now(CLOCK_MONOTONIC);
+  finishKeyAfterDelay();
+}
+
+void InputScheduler::finishKeyAfterDelay() {
+  const uint64_t delayUsec =
+      static_cast<uint64_t>(activeTiming_.postCommitDelayMs) * 1000;
   if (debugProvider_()) {
-    ARECA_INFO() << "areca: post-commit barrier delay_ms=" << delayMs
+    ARECA_INFO() << "areca: post-commit barrier delay_us=" << delayUsec
+                 << " accuracy_us=" << activeTiming_.timerAccuracyUsec
                  << " queue_depth=" << queue_.size();
   }
-  if (delayMs == 0) {
+  if (delayUsec == 0) {
     finishKey();
     return;
   }
-  postCommitTimer_.start(delayMs, [this]() { finishKey(); });
+
+  const uint64_t deadline = im::now(CLOCK_MONOTONIC) + delayUsec;
+  postCommitTimer_ = eventLoop_.addTimeEvent(
+      CLOCK_MONOTONIC, deadline, activeTiming_.timerAccuracyUsec,
+      [this](im::EventSourceTime *, uint64_t) {
+        auto completedTimer = std::move(postCommitTimer_);
+        finishKey();
+        return false;
+      });
+  if (!postCommitTimer_) {
+    finishKey();
+    return;
+  }
+  postCommitTimer_->setOneShot();
 }
 
 } // namespace areca

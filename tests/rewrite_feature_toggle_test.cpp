@@ -1,0 +1,696 @@
+#include <cassert>
+#include <chrono>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "im/im.h"
+
+#include "areca_config.h"
+#include "input_scheduler.h"
+#include "rewrite_mode.h"
+
+namespace {
+
+class TestInputContext final : public areca::im::InputContext {
+public:
+  explicit TestInputContext(areca::im::InputContextManager &manager,
+                            const char *program = "google-chrome",
+                            const char *frontend = "wayland")
+      : areca::im::InputContext(manager, program), frontend_(frontend) {}
+  ~TestInputContext() override { destroy(); }
+
+  const char *frontend() const override { return frontend_; }
+
+  void commitStringImpl(const std::string &text) override {
+    events.push_back("commit:" + text);
+  }
+  void deleteSurroundingTextImpl(int, unsigned int) override {}
+  void forwardKeyImpl(const areca::im::ForwardKeyEvent &event) override {
+    events.push_back(std::string(event.isRelease() ? "up:" : "down:") +
+                     areca::im::Key::keySymToUTF8(event.rawKey().sym()));
+  }
+  void updatePreeditImpl() override {}
+
+  std::vector<std::string> events;
+
+private:
+  const char *frontend_;
+};
+
+class TestEngine final : public areca::VietnameseEngine {
+public:
+  bool canProcessKey(uint32_t codepoint) const override {
+    return codepoint != ' ' && codepoint != '.';
+  }
+
+  areca::BambooResult process(uint32_t, const std::string &text) override {
+    areca::BambooResult result;
+    result.currentText = current_;
+    result.newText = current_ + text;
+    result.deleteCount = text == "r" ? 1 : 0;
+    result.commitText = text == "x" ? "X" : text;
+    current_ = result.newText;
+    return result;
+  }
+
+  areca::BambooResult processWithoutMacro(uint32_t codepoint,
+                                          const std::string &text) override {
+    ++withoutMacroProcessCount;
+    return process(codepoint, text);
+  }
+
+  areca::BambooResult processBackspace() override {
+    ++backspaceProcessCount;
+    macroUndoAvailable = false;
+    return {};
+  }
+  void backspace() override { ++plainBackspaceCount; }
+  void reset() override { current_.clear(); }
+  bool restoreFromRenderedText(const std::string &text) override {
+    if (text.empty() || text == "tiế" || text == "iế") {
+      return false;
+    }
+    current_ = text;
+    return true;
+  }
+  const std::string &currentText() const override { return current_; }
+  bool canUndoMacro() const override { return macroUndoAvailable; }
+
+  int backspaceProcessCount = 0;
+  int plainBackspaceCount = 0;
+  int withoutMacroProcessCount = 0;
+  bool macroUndoAvailable = false;
+
+private:
+  std::string current_;
+};
+
+// Reproduce GNOME's original press + replay after a committed word boundary.
+void testForwardedBackspaceReplay() {
+  areca::im::EventLoop loop;
+  areca::im::InputContextManager manager;
+  areca::RewriteModeHandler::StateFactory factory([](areca::im::InputContext &) {
+    return new areca::RewriteInputState("Telex 2", true, true, true, "Unicode",
+                                        false, false, 1, {});
+  });
+  manager.registerProperty("rewrite-backspace-replay-test", &factory);
+  TestInputContext context(manager, "gnome-text-editor", "dbus");
+  areca::InputScheduler scheduler(
+      loop,
+      [&](areca::im::InputContext &ic) {
+        return ic.propertyFor(&factory)->engine.get();
+      },
+      [](areca::im::InputContext &) { return areca::SchedulerTiming{}; },
+      [] { return false; },
+      [](areca::im::InputContext &, const areca::BambooResult &) {
+        return areca::RewriteBackendSelection{};
+      });
+  areca::RewriteModeHandler handler(
+      loop, factory, scheduler, [] { return false; }, [] { return false; },
+      [](areca::im::InputContext &, const char *) {}, [] { return true; },
+      [](areca::im::InputContext &) { return false; },
+      [](areca::im::InputContext &) { return false; },
+      [](const areca::im::Key &) { return false; });
+  auto *state = context.propertyFor(&factory);
+  auto prepare = [&]() {
+    handler.resetContext(context);
+    for (char c : std::string("ddungs "))
+      state->engine->process(c, std::string(1, c));
+    assert(state->engine->currentText().empty());
+  };
+  auto press = [&](int time, bool repeat) {
+    areca::im::KeyEvent event(
+        &context,
+        areca::im::Key(areca::im::Key_BackSpace,
+                   repeat ? areca::im::KeyState::Repeat : areca::im::KeyState::NoState,
+                   22),
+        false, time);
+    handler.handleKeyEvent(event);
+    assert(!event.filtered() && !event.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+  };
+  auto release = [&]() {
+    areca::im::KeyEvent event(
+        &context, areca::im::Key(areca::im::Key_BackSpace, areca::im::KeyState::NoState, 22),
+        true, 1100);
+    handler.handleKeyEvent(event);
+    assert(!event.accepted() && !event.filtered());
+    assert(state->forwardedBackspacePresses.empty());
+  };
+  for (bool repeatFlag : {false, true}) {
+    prepare();
+    press(1000, false); // Deletes the space, restores the finalized word.
+    assert(state->engine->currentText() == "đúng");
+    press(1000, repeatFlag); // Replay must not erase g or start recovery.
+    assert(state->engine->currentText() == "đúng");
+    release();
+    const auto result = state->engine->process('j', "j");
+    assert(result.newText == "đụng");
+    assert(result.deleteCount == 3 && result.commitText == "ụng");
+  }
+  for (bool repeatFlag : {false, true}) {
+    prepare();
+    press(1000, false);
+    press(1001, repeatFlag); // A real held press has a different timestamp.
+    assert(state->engine->currentText() == "đún");
+    press(1001, true);
+    assert(state->engine->currentText() == "đún");
+    press(1000, true); // A delayed old replay must also remain harmless.
+    assert(state->engine->currentText() == "đún");
+    release();
+  }
+  prepare();
+  press(1000, false);
+  handler.resetContext(context);
+  assert(state->forwardedBackspacePresses.empty());
+}
+
+} // namespace
+
+int main() {
+  testForwardedBackspaceReplay();
+  // Macro undo phải chặn cứng auto-repeat và chỉ xử lý đúng một lần khi thả
+  // Backspace, giống BackspaceRecovery thường.
+  // GNOME/IBus gửi các press lặp không kèm cờ Repeat.
+  for (bool ibusWithoutRepeatFlag : {false, true}) {
+    const auto repeatState = ibusWithoutRepeatFlag ? areca::im::KeyState::NoState
+                                                   : areca::im::KeyState::Repeat;
+    areca::im::EventLoop loop;
+    areca::im::InputContextManager manager;
+    areca::RewriteModeHandler::StateFactory factory([](areca::im::InputContext &) {
+      auto *state = new areca::RewriteInputState(
+          "Telex 2", true, true, true, "Unicode", false, false, 1, {});
+      auto engine = std::make_unique<TestEngine>();
+      engine->macroUndoAvailable = true;
+      state->engine = std::move(engine);
+      return state;
+    });
+    manager.registerProperty("rewrite-macro-backspace-test", &factory);
+    TestInputContext context(manager, "org.gnome.TextEditor",
+                             ibusWithoutRepeatFlag ? "ibus" : "wayland");
+    areca::InputScheduler scheduler(
+        loop,
+        [&](areca::im::InputContext &ic) {
+          return ic.propertyFor(&factory)->engine.get();
+        },
+        [](areca::im::InputContext &) {
+          areca::SchedulerTiming timing;
+          timing.postCommitDelayMs = 0;
+          return timing;
+        },
+        [] { return false; },
+        [](areca::im::InputContext &, const areca::BambooResult &) {
+          return areca::RewriteBackendSelection{};
+        });
+    areca::RewriteModeHandler handler(
+        loop, factory, scheduler, [] { return false; }, [] { return false; },
+        [](areca::im::InputContext &, const char *) {}, [] { return true; },
+        [](areca::im::InputContext &) { return false; },
+        [](areca::im::InputContext &) { return false; },
+        [](const areca::im::Key &key) {
+          return key.normalize().sym() == areca::im::Key_space &&
+                 key.states().test(areca::im::KeyState::Shift);
+        });
+
+    auto *state = context.propertyFor(&factory);
+    auto *engine = static_cast<TestEngine *>(state->engine.get());
+
+    areca::im::KeyEvent press(&context, areca::im::Key(areca::im::Key_BackSpace));
+    handler.handleKeyEvent(press);
+    assert(press.accepted());
+    assert(state->backspaceRecoveryAwaitingRelease);
+    assert(engine->backspaceProcessCount == 0);
+
+    areca::im::KeyEvent repeat(&context,
+                           areca::im::Key(areca::im::Key_BackSpace, repeatState));
+    handler.handleKeyEvent(repeat);
+    assert(!repeat.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+    assert(engine->backspaceProcessCount == 0);
+    assert(engine->currentText().empty());
+
+    areca::im::KeyEvent release(&context, areca::im::Key(areca::im::Key_BackSpace), true);
+    handler.handleKeyEvent(release);
+    assert(!release.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+    assert(engine->backspaceProcessCount == 0);
+
+    // Đợi qua cửa sổ bảo vệ phím inject sau transaction trước đó.
+    std::this_thread::sleep_for(std::chrono::milliseconds(55));
+
+    // Giống Preedit: hễ còn composition thì Backspace luôn đi qua
+    // processBackspace(), không phụ thuộc cờ trạng thái spellcheck riêng.
+    engine->process('a', "a");
+    areca::im::KeyEvent plainPress(&context, areca::im::Key(areca::im::Key_BackSpace));
+    handler.handleKeyEvent(plainPress);
+    assert(plainPress.accepted());
+    assert(state->backspaceRecoveryAwaitingRelease);
+
+    areca::im::KeyEvent plainRelease(&context, areca::im::Key(areca::im::Key_BackSpace),
+                                 true);
+    handler.handleKeyEvent(plainRelease);
+    assert(plainRelease.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+    assert(engine->backspaceProcessCount == 1);
+    assert(engine->plainBackspaceCount == 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(55));
+
+    // Lần Backspace tiếp theo vẫn đi cùng luồng; không có cờ one-shot làm nó
+    // rơi sang nhánh forward.
+    engine->process('a', "a");
+    areca::im::KeyEvent restoredPress(&context, areca::im::Key(areca::im::Key_BackSpace));
+    handler.handleKeyEvent(restoredPress);
+    assert(restoredPress.accepted());
+    assert(state->backspaceRecoveryAwaitingRelease);
+
+    areca::im::KeyEvent restoredRepeat(&context,
+                                   areca::im::Key(areca::im::Key_BackSpace, repeatState));
+    handler.handleKeyEvent(restoredRepeat);
+    assert(!restoredRepeat.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+    assert(engine->currentText().empty());
+
+    areca::im::KeyEvent continuedHold(&context,
+                                  areca::im::Key(areca::im::Key_BackSpace, repeatState));
+    handler.handleKeyEvent(continuedHold);
+    assert(!continuedHold.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+    assert(engine->backspaceProcessCount == 1);
+
+    // Sau khi thấy repeat, mọi event còn lại đi thẳng xuống ứng dụng.
+    areca::im::KeyEvent repeatedRelease(
+        &context, areca::im::Key(areca::im::Key_BackSpace, repeatState), true);
+    handler.handleKeyEvent(repeatedRelease);
+    assert(!repeatedRelease.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+    assert(engine->backspaceProcessCount == 1);
+
+    areca::im::KeyEvent repeatAfterRelease(
+        &context, areca::im::Key(areca::im::Key_BackSpace, repeatState));
+    handler.handleKeyEvent(repeatAfterRelease);
+    assert(!repeatAfterRelease.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+
+    areca::im::KeyEvent restoredRelease(&context, areca::im::Key(areca::im::Key_BackSpace),
+                                    true);
+    handler.handleKeyEvent(restoredRelease);
+    assert(!restoredRelease.accepted());
+    assert(!state->backspaceRecoveryAwaitingRelease);
+    assert(engine->backspaceProcessCount == 1);
+
+    engine->reset();
+    engine->process('b', "b");
+    engine->process('t', "t");
+    areca::im::KeyEvent bypassSpace(
+        &context, areca::im::Key(areca::im::Key_space, areca::im::KeyState::Shift));
+    handler.handleKeyEvent(bypassSpace);
+    assert(bypassSpace.accepted());
+    assert(engine->withoutMacroProcessCount == 1);
+  }
+
+  // Edge X11 sends reset immediately after a forwarded Backspace. Preserve
+  // the Bamboo snapshot restored while crossing a word boundary so the next
+  // key can still edit that word.
+  {
+    areca::im::EventLoop loop;
+    areca::im::InputContextManager manager;
+    areca::RewriteModeHandler::StateFactory factory([](areca::im::InputContext &) {
+      auto *state = new areca::RewriteInputState(
+          "Telex 2", true, true, true, "Unicode", false, false, 1, {});
+      state->engine = std::make_unique<TestEngine>();
+      return state;
+    });
+    manager.registerProperty("rewrite-backspace-reset-test", &factory);
+    TestInputContext context(manager, "msedge", "dbus");
+    areca::InputScheduler scheduler(
+        loop,
+        [&](areca::im::InputContext &ic) {
+          return ic.propertyFor(&factory)->engine.get();
+        },
+        [](areca::im::InputContext &) { return areca::SchedulerTiming{}; },
+        [] { return false; },
+        [](areca::im::InputContext &, const areca::BambooResult &) {
+          return areca::RewriteBackendSelection{};
+        });
+    areca::RewriteModeHandler handler(
+        loop, factory, scheduler, [] { return false; }, [] { return false; },
+        [](areca::im::InputContext &, const char *) {}, [] { return false; },
+        [](areca::im::InputContext &) { return false; },
+        [](areca::im::InputContext &) { return false; },
+        [](const areca::im::Key &) { return false; });
+    auto *state = context.propertyFor(&factory);
+    state->engine->process('a', "a");
+    areca::im::KeyEvent backspace(&context, areca::im::Key(areca::im::Key_BackSpace));
+    handler.handleKeyEvent(backspace);
+    assert(!backspace.accepted());
+    assert(!state->engine->currentText().empty());
+    handler.requestProtectedReset(context);
+    assert(!state->engine->currentText().empty());
+    handler.deactivate(context);
+    assert(!state->engine->currentText().empty());
+  }
+
+  // So sánh handler với luồng accept/enqueue cũ, dùng cùng loại engine giả.
+  for (bool initiallyEnabled : {false, true}) {
+    areca::im::EventLoop loop;
+    areca::im::InputContextManager manager;
+    areca::RewriteModeHandler::StateFactory factory([](areca::im::InputContext &) {
+      auto *state = new areca::RewriteInputState(
+          "Telex 2", true, true, true, "Unicode", false, false, 1, {});
+      state->engine = std::make_unique<TestEngine>();
+      return state;
+    });
+    manager.registerProperty("rewrite-test", &factory);
+    TestInputContext context(manager);
+    bool enabled = initiallyEnabled;
+    areca::InputScheduler scheduler(
+        loop,
+        [&](areca::im::InputContext &ic) {
+          return ic.propertyFor(&factory)->engine.get();
+        },
+        [](areca::im::InputContext &) {
+          areca::SchedulerTiming timing;
+          timing.postCommitDelayMs = 0;
+          return timing;
+        },
+        [] { return false; },
+        [](areca::im::InputContext &, const areca::BambooResult &) {
+          return areca::RewriteBackendSelection{};
+        });
+    areca::RewriteModeHandler handler(
+        loop, factory, scheduler, [] { return false; }, [] { return false; },
+        [](areca::im::InputContext &, const char *) {}, [] { return false; },
+        [&](areca::im::InputContext &ic) {
+          return enabled && ic.program() == "google-chrome";
+        },
+        [](areca::im::InputContext &) { return false; },
+        [](const areca::im::Key &) { return false; });
+    if (enabled) {
+      areca::im::KeyEvent first(&context, areca::im::Key(areca::im::Key_a));
+      handler.handleKeyEvent(first);
+      assert(!first.accepted());
+      assert(context.events.empty());
+      // Tắt ngay trên handler đang tồn tại; giả lập composition đã được xóa.
+      enabled = false;
+      context.propertyFor(&factory)->engine->reset();
+    }
+    areca::im::KeyEvent key(&context, areca::im::Key(areca::im::Key_a));
+    handler.handleKeyEvent(key);
+    assert(key.accepted());
+    assert(context.events == std::vector<std::string>{"commit:a"});
+    assert(context.propertyFor(&factory)->engine->currentText() == "a");
+    assert(scheduler.queuedKeyCount() == 0);
+
+    // Luồng cũ phải tạo cùng kết quả và xử lý Bamboo đúng một lần.
+    TestInputContext legacyContext(manager);
+    TestEngine legacyEngine;
+    areca::InputScheduler legacy(
+        loop,
+        [&](areca::im::InputContext &) -> areca::VietnameseEngine * {
+          return &legacyEngine;
+        },
+        [](areca::im::InputContext &) {
+          areca::SchedulerTiming timing;
+          timing.postCommitDelayMs = 0;
+          return timing;
+        },
+        [] { return false; },
+        [](areca::im::InputContext &, const areca::BambooResult &) {
+          return areca::RewriteBackendSelection{};
+        });
+    areca::im::KeyEvent legacyKey(&legacyContext, areca::im::Key(areca::im::Key_a));
+    legacyKey.filterAndAccept();
+    legacy.enqueue(legacyContext, 'a', "a");
+    assert(context.events == legacyContext.events);
+    assert(key.accepted() == legacyKey.accepted());
+    assert(context.propertyFor(&factory)->engine->currentText() ==
+           legacyEngine.currentText());
+
+    // Bật option không được forward phím đầu trong ứng dụng ngoài trình duyệt.
+    enabled = true;
+    TestInputContext nonBrowserContext(manager, "org.gnome.TextEditor");
+    areca::im::KeyEvent nonBrowserKey(&nonBrowserContext, areca::im::Key(areca::im::Key_a));
+    handler.handleKeyEvent(nonBrowserKey);
+    assert(nonBrowserKey.accepted());
+    assert(nonBrowserContext.events == std::vector<std::string>{"commit:a"});
+  }
+
+  // Restore được gọi đúng một lần trước phím text đầu tiên và phần text đã
+  // commit trở thành prefix của composition, nên chỉ ký tự mới được commit.
+  areca::im::EventLoop restoreLoop;
+  areca::im::InputContextManager restoreManager;
+  areca::RewriteModeHandler::StateFactory restoreFactory(
+      [](areca::im::InputContext &) {
+        auto *state = new areca::RewriteInputState(
+            "Telex 2", true, true, true, "Unicode", false, false, 1, {});
+        state->engine = std::make_unique<TestEngine>();
+        return state;
+      });
+  restoreManager.registerProperty("rewrite-restore-test", &restoreFactory);
+  TestInputContext restoreContext(restoreManager, "org.gnome.TextEditor");
+  restoreContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
+  // Caret nằm giữa từ: Rewrite chỉ phục hồi prefix trước caret; suffix `n`
+  // tiếp tục nằm trong ứng dụng và không tham gia transaction xóa/chèn.
+  restoreContext.surroundingText().setText("tiến", 3, 3);
+  areca::InputScheduler restoreScheduler(
+      restoreLoop,
+      [&](areca::im::InputContext &ic) {
+        return ic.propertyFor(&restoreFactory)->engine.get();
+      },
+      [](areca::im::InputContext &) {
+        areca::SchedulerTiming timing;
+        timing.postCommitDelayMs = 0;
+        return timing;
+      },
+      [] { return false; },
+      [](areca::im::InputContext &, const areca::BambooResult &) {
+        return areca::RewriteBackendSelection{};
+      });
+  areca::RewriteModeHandler restoreHandler(
+      restoreLoop, restoreFactory, restoreScheduler, [] { return false; },
+      [] { return false; }, [](areca::im::InputContext &, const char *) {},
+      [] { return false; }, [](areca::im::InputContext &) { return false; },
+      [](areca::im::InputContext &ic) {
+        return !ic.capabilityFlags().test(areca::im::CapabilityFlag::Url);
+      },
+      [](const areca::im::Key &) { return false; });
+  restoreHandler.activate(restoreContext);
+  areca::im::KeyEvent restoreKey(&restoreContext, areca::im::Key(areca::im::Key_a));
+  restoreHandler.handleKeyEvent(restoreKey);
+  assert(restoreKey.accepted());
+  assert(restoreContext.events == std::vector<std::string>{"commit:a"});
+  assert(restoreContext.propertyFor(&restoreFactory)->engine->currentText() ==
+         "ếa");
+
+  // Log anvildroid-gui: frontend báo surrounding trễ một nhịp. Sau khi Areca
+  // commit "gõ " thì update tới vẫn chỉ là "gõ". Areca đã biết chắc text trước
+  // con trỏ nên không arm restore; nếu arm, phím đầu từ mới sẽ nạp nhầm "gõ".
+  TestInputContext laggingContext(restoreManager, "anvildroid-gui");
+  laggingContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
+  restoreHandler.activate(laggingContext);
+  auto *laggingState = laggingContext.propertyFor(&restoreFactory);
+  assert(laggingState->knownTextBeforeCursor.empty());
+  restoreHandler.noteCommitted(laggingContext, 0, "go");
+  restoreHandler.noteCommitted(laggingContext, 1, "õ");
+  restoreHandler.noteCommitted(laggingContext, 0, " ");
+  assert(laggingState->knownTextBeforeCursor == "gõ ");
+  laggingState->surroundingRestoreArmed = false;
+  laggingContext.surroundingText().setText("gõ", 2, 2);
+  restoreHandler.onSurroundingTextUpdated(laggingContext);
+  assert(!laggingState->surroundingRestoreArmed);
+
+  // Reset làm Areca không còn biết con trỏ đứng sau gì: update lại được arm.
+  restoreHandler.resetContext(laggingContext);
+  assert(laggingState->knownTextBeforeCursor.empty());
+  laggingState->surroundingRestoreArmed = false;
+  restoreHandler.onSurroundingTextUpdated(laggingContext);
+  assert(laggingState->surroundingRestoreArmed);
+
+  // Phím ứng dụng tự xử lý (Enter) làm mất phần text đã biết.
+  restoreHandler.noteCommitted(laggingContext, 0, "ab");
+  areca::im::KeyEvent enterKey(&laggingContext, areca::im::Key(areca::im::Key_Return));
+  restoreHandler.handleKeyEvent(enterKey);
+  assert(!enterKey.filtered());
+  assert(laggingState->knownTextBeforeCursor.empty());
+
+  // Restore vẫn được arm (vd. reset) nhưng snapshot thiếu text Areca vừa
+  // commit: bỏ qua lần restore này, không nạp nhầm "gõ" vào từ mới.
+  std::this_thread::sleep_for(std::chrono::milliseconds(55));
+  laggingState->engine->reset();
+  restoreHandler.noteCommitted(laggingContext, 0, "gõ ");
+  laggingContext.surroundingText().setText("gõ", 2, 2);
+  laggingState->surroundingRestoreArmed = true;
+  areca::im::KeyEvent staleKey(&laggingContext, areca::im::Key(areca::im::Key_a));
+  restoreHandler.handleKeyEvent(staleKey);
+  assert(staleKey.accepted());
+  assert(laggingState->engine->currentText() == "a");
+
+  // Snapshot đã đủ text: restore chạy bình thường.
+  std::this_thread::sleep_for(std::chrono::milliseconds(55));
+  laggingState->engine->reset();
+  laggingState->knownTextBeforeCursor = "tiế";
+  laggingContext.surroundingText().setText("tiến", 3, 3);
+  laggingState->surroundingRestoreArmed = true;
+  areca::im::KeyEvent freshKey(&laggingContext, areca::im::Key(areca::im::Key_a));
+  restoreHandler.handleKeyEvent(freshKey);
+  assert(freshKey.accepted());
+  assert(laggingState->engine->currentText() == "ếa");
+
+  // Tạm thời không restore trong address bar: Chromium có thể giữ snapshot
+  // getText() cũ sau khi nội dung hiển thị đã bị Backspace xóa sạch.
+  TestInputContext addressBarContext(restoreManager, "google-chrome");
+  areca::im::CapabilityFlags addressBarCapabilities;
+  addressBarCapabilities |= areca::im::CapabilityFlag::SurroundingText;
+  addressBarCapabilities |= areca::im::CapabilityFlag::Url;
+  addressBarContext.setCapabilityFlags(addressBarCapabilities);
+  addressBarContext.surroundingText().setText("stale", 5, 5);
+  restoreHandler.activate(addressBarContext);
+  areca::im::KeyEvent addressBarKey(&addressBarContext, areca::im::Key(areca::im::Key_a));
+  restoreHandler.handleKeyEvent(addressBarKey);
+  assert(addressBarKey.accepted());
+  assert(
+      addressBarContext.propertyFor(&restoreFactory)->engine->currentText() ==
+      "a");
+
+  areca::im::InputContextManager boundaryManager;
+  areca::RewriteModeHandler::StateFactory boundaryFactory(
+      [](areca::im::InputContext &) {
+        auto *state = new areca::RewriteInputState(
+            "Telex 2", true, true, true, "Unicode", false, false, 1, {});
+        state->engine = std::make_unique<TestEngine>();
+        return state;
+      });
+  boundaryManager.registerProperty("rewrite-boundary-test", &boundaryFactory);
+  TestInputContext boundaryContext(boundaryManager, "org.gnome.TextEditor");
+  boundaryContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
+  // Mô phỏng snapshot cũ sau khi macro `k → không` đã được commit bởi dấu
+  // chấm nhưng frontend chưa kịp trả snapshot chứa dấu chấm.
+  boundaryContext.surroundingText().setText("không", 5, 5);
+  areca::InputScheduler boundaryScheduler(
+      restoreLoop,
+      [&](areca::im::InputContext &ic) {
+        return ic.propertyFor(&boundaryFactory)->engine.get();
+      },
+      [](areca::im::InputContext &) {
+        areca::SchedulerTiming timing;
+        timing.postCommitDelayMs = 0;
+        return timing;
+      },
+      [] { return false; },
+      [](areca::im::InputContext &, const areca::BambooResult &) {
+        return areca::RewriteBackendSelection{};
+      });
+  areca::RewriteModeHandler boundaryHandler(
+      restoreLoop, boundaryFactory, boundaryScheduler, [] { return false; },
+      [] { return false; }, [](areca::im::InputContext &, const char *) {},
+      [] { return false; }, [](areca::im::InputContext &) { return false; },
+      [](areca::im::InputContext &) { return true; },
+      [](const areca::im::Key &) { return false; });
+  boundaryHandler.activate(boundaryContext);
+  auto *boundaryState = boundaryContext.propertyFor(&boundaryFactory);
+  assert(boundaryState->wordSerial == 0);
+  assert(!boundaryState->wordBoundaryPending);
+  areca::im::KeyEvent trailingSpace(&boundaryContext, areca::im::Key(areca::im::Key_space));
+  boundaryHandler.handleKeyEvent(trailingSpace);
+  assert(!boundaryState->surroundingRestoreArmed);
+  assert(boundaryState->wordSerial == 0);
+  assert(boundaryState->wordBoundaryPending);
+  areca::im::KeyEvent nextLetter(&boundaryContext, areca::im::Key(areca::im::Key_a));
+  boundaryHandler.handleKeyEvent(nextLetter);
+  assert(boundaryState->wordSerial == 1);
+  assert(!boundaryState->wordBoundaryPending);
+  assert((boundaryContext.events ==
+          std::vector<std::string>{"commit: ", "commit:a"}));
+  assert(boundaryContext.propertyFor(&boundaryFactory)->engine->currentText() ==
+         " a");
+
+  areca::AppProfilesConfig appProfiles;
+  assert(appProfiles.appOverrides.value().empty());
+  areca::AppBackendOverrideEntry overrideEntry;
+  overrideEntry.appName.setValue("discord");
+  overrideEntry.mode.setValue(areca::AppBackendMode::ShiftSelect);
+  appProfiles.appOverrides.mutableValue()->push_back(std::move(overrideEntry));
+  assert(appProfiles.appOverrides.value().size() == 1);
+  assert(appProfiles.appOverrides.value()[0].appName.value() == "discord");
+  assert(appProfiles.appOverrides.value()[0].mode.value() ==
+         areca::AppBackendMode::ShiftSelect);
+
+  areca::AdvancedConfig advancedConfig;
+  assert(!advancedConfig.useSurroundingV2InsteadOfSurroundingV1.value());
+  assert(advancedConfig.useUinputInsteadOfForwardKey.value());
+  assert(!advancedConfig.useXTestInsteadOfUinput.value());
+  assert(advancedConfig.surroundingProbeTimeoutMs.value() == 80);
+
+  advancedConfig.ximAfterBackspaceWaitMs.setValue(21);
+  advancedConfig.fcitx4AfterBackspaceWaitMs.setValue(22);
+  advancedConfig.backspaceDelayMs.setValue(27);
+  advancedConfig.uinputShiftSelectDelayMs.setValue(28);
+  advancedConfig.surroundingWaitMs.setValue(29);
+  advancedConfig.xtestBackspaceDelayMs.setValue(30);
+  advancedConfig.afterBackspaceWaitMs.setValue(31);
+  advancedConfig.afterUinputShiftSelectWaitMs.setValue(32);
+  advancedConfig.afterXTestBackspaceWaitMs.setValue(33);
+  advancedConfig.ximAfterUinputShiftSelectWaitMs.setValue(23);
+  advancedConfig.fcitx4AfterUinputShiftSelectWaitMs.setValue(24);
+  advancedConfig.ximAfterXTestBackspaceWaitMs.setValue(25);
+  advancedConfig.fcitx4AfterXTestBackspaceWaitMs.setValue(26);
+  areca::applyBestPerformancePreset(advancedConfig);
+  assert(advancedConfig.backspaceDelayMs.value() == 27);
+  assert(advancedConfig.afterBackspaceWaitMs.value() == 31);
+  assert(advancedConfig.waylandAfterBackspaceWaitMs.value() == 3);
+  assert(advancedConfig.dbusAfterBackspaceWaitMs.value() == 5);
+  assert(advancedConfig.ibusAfterBackspaceWaitMs.value() == 5);
+  assert(advancedConfig.ximAfterBackspaceWaitMs.value() == 21);
+  assert(advancedConfig.fcitx4AfterBackspaceWaitMs.value() == 22);
+  assert(advancedConfig.uinputShiftSelectDelayMs.value() == 28);
+  assert(advancedConfig.afterUinputShiftSelectWaitMs.value() == 32);
+  assert(advancedConfig.waylandAfterUinputShiftSelectWaitMs.value() == 3);
+  assert(advancedConfig.dbusAfterUinputShiftSelectWaitMs.value() == 5);
+  assert(advancedConfig.ibusAfterUinputShiftSelectWaitMs.value() == 5);
+  assert(advancedConfig.ximAfterUinputShiftSelectWaitMs.value() == 23);
+  assert(advancedConfig.fcitx4AfterUinputShiftSelectWaitMs.value() == 24);
+  assert(advancedConfig.surroundingWaitMs.value() == 1);
+  assert(advancedConfig.surroundingDeleteDelayMs.value() == 1);
+  assert(advancedConfig.waylandSurroundingDeleteDelayMs.value() == 1);
+  assert(advancedConfig.afterSurroundingDeleteWaitMs.value() == 1);
+  assert(advancedConfig.xtestBackspaceDelayMs.value() == 30);
+  assert(advancedConfig.afterXTestBackspaceWaitMs.value() == 33);
+  assert(advancedConfig.waylandAfterXTestBackspaceWaitMs.value() == 3);
+  assert(advancedConfig.dbusAfterXTestBackspaceWaitMs.value() == 5);
+  assert(advancedConfig.ibusAfterXTestBackspaceWaitMs.value() == 5);
+  assert(advancedConfig.ximAfterXTestBackspaceWaitMs.value() == 25);
+  assert(advancedConfig.fcitx4AfterXTestBackspaceWaitMs.value() == 26);
+
+  areca::ArecaConfig mainConfig;
+  assert(!mainConfig.shiftSelectFallbackForBrowser.value());
+  assert(mainConfig.useBackspaceForUrl.value());
+  assert(!mainConfig.disableVietnameseInTerminal.value());
+  assert(areca::shouldForceBackspaceForUrl(
+      mainConfig.useBackspaceForUrl.value(),
+      areca::im::CapabilityFlags(areca::im::CapabilityFlag::Url)));
+  assert(areca::shouldForceBackspaceForUrl(
+      true, areca::im::CapabilityFlags(areca::im::CapabilityFlag::Url)));
+  assert(!areca::shouldForceBackspaceForUrl(
+      true, areca::im::CapabilityFlags(areca::im::CapabilityFlag::SurroundingText)));
+  assert(
+      areca::shouldForceBackspaceForUrl(true, areca::im::CapabilityFlags{}, true));
+  assert(!areca::shouldForceBackspaceForUrl(
+      false, areca::im::CapabilityFlags(areca::im::CapabilityFlag::Url), true));
+  assert(areca::shouldUseShiftSelectForUrl(true, false, true));
+  assert(!areca::shouldUseShiftSelectForUrl(true, false, false));
+  assert(!areca::shouldUseShiftSelectForUrl(true, true, true));
+  assert(!areca::shouldUseShiftSelectForUrl(false, false, true));
+  assert(mainConfig.macroBypassModifier.value() ==
+         areca::MacroBypassModifier::Shift);
+  assert(areca::isMacroBypassSpace(
+      areca::im::Key(areca::im::Key_space, areca::im::KeyState::Shift),
+      mainConfig.macroBypassModifier.value()));
+  assert(!areca::isMacroBypassSpace(areca::im::Key(areca::im::Key_space),
+                                    mainConfig.macroBypassModifier.value()));
+  assert(!areca::isMacroBypassSpace(
+      areca::im::Key(areca::im::Key_space, areca::im::KeyStates{areca::im::KeyState::Shift,
+                                                  areca::im::KeyState::Ctrl}),
+      mainConfig.macroBypassModifier.value()));
+}

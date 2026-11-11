@@ -11,13 +11,18 @@ namespace areca {
 // không bị xen giữa.
 class LogLine final {
 public:
-  explicit LogLine(bool error) : error_(error) {}
+  enum class Level { Info, Warn, Error };
+  explicit LogLine(Level level) : level_(level) {}
   ~LogLine() {
     const auto text = stream_.str();
-    if (error_) {
-      g_warning("%s", text.c_str());
-    } else {
+    switch (level_) {
+    case Level::Info:
       g_message("%s", text.c_str());
+      break;
+    case Level::Warn:
+    case Level::Error:
+      g_warning("%s", text.c_str());
+      break;
     }
   }
   LogLine(const LogLine &) = delete;
@@ -29,11 +34,12 @@ public:
   }
 
 private:
-  bool error_;
+  Level level_;
   std::ostringstream stream_;
 };
 
 } // namespace areca
 
-#define ARECA_INFO() ::areca::LogLine(false)
-#define ARECA_ERROR() ::areca::LogLine(true)
+#define ARECA_INFO() ::areca::LogLine(::areca::LogLine::Level::Info)
+#define ARECA_WARN() ::areca::LogLine(::areca::LogLine::Level::Warn)
+#define ARECA_ERROR() ::areca::LogLine(::areca::LogLine::Level::Error)

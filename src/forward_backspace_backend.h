@@ -2,45 +2,61 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 
-#include "one_shot_timer.h"
+#include "im/im.h"
+
+#include "adaptive_wait.h"
+#include "event_loop_post.h"
 #include "rewrite_backend.h"
 
 namespace areca {
 
-// Xoá bằng cách gửi Backspace qua IBus cho ứng dụng, chờ một nhịp rồi commit.
-// Không có ACK: ứng dụng xử lý phím forward bất đồng bộ với commit, nên thời
-// gian chờ sau Backspace cuối là thứ giữ đúng thứ tự.
 class ForwardBackspaceBackend final : public RewriteBackend {
 public:
   using DebugProvider = std::function<bool()>;
 
-  explicit ForwardBackspaceBackend(DebugProvider debugProvider);
+  ForwardBackspaceBackend(im::EventLoop &eventLoop,
+                          AdaptiveWait &adaptiveWait,
+                          DebugProvider debugProvider);
   ~ForwardBackspaceBackend() override;
-  ForwardBackspaceBackend(const ForwardBackspaceBackend &) = delete;
-  ForwardBackspaceBackend &operator=(const ForwardBackspaceBackend &) = delete;
 
   const char *name() const override { return "forward-backspace"; }
-  ApplyStatus apply(InputClient &client, const RewritePlan &plan,
+  ApplyStatus apply(im::InputContext &inputContext, const RewritePlan &plan,
                     RewriteDone onDone) override;
 
   bool hasPending() const { return transactionId_ != 0; }
 
 private:
+  enum class TimerDispatch { TimerCallback, PostEvent };
+
   void sendNextBackspace();
+  void scheduleNextBackspace();
+  void scheduleCommit();
+  void commitAfterAdaptiveWait(uint32_t appliedExtraWaitMs);
   void commitAndComplete();
+  void completeWithoutCommit();
+  void schedule(uint32_t delayMs, TimerDispatch dispatch,
+                std::function<void()> callback);
+  void dispatchPostEvent(uint64_t deadlineUsec, std::function<void()> callback);
+  void observeAndRun(uint64_t deadlineUsec, std::function<void()> callback);
   void clearPending();
 
+  im::EventLoop &eventLoop_;
+  EventLoopPostTask commitPost_;
+  // State dùng chung với UinputBackspaceBackend và probe lag toàn cục.
+  AdaptiveWait &adaptiveWait_;
   DebugProvider debugProvider_;
-  OneShotTimer timer_;
-  InputClient *client_ = nullptr;
+  std::unique_ptr<im::EventSourceTime> timer_;
+  im::TrackableObjectReference<im::InputContext> inputContext_;
   RewriteDone onDone_;
   uint64_t transactionId_ = 0;
   uint32_t remainingBackspaces_ = 0;
   uint32_t sentBackspaces_ = 0;
   uint32_t backspaceDelayMs_ = 0;
   uint32_t afterBackspaceWaitMs_ = 0;
+  uint64_t timerAccuracyUsec_ = 1;
   std::string commitText_;
 };
 

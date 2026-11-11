@@ -1,0 +1,330 @@
+#include "uinput_backspace_backend.h"
+
+#include <linux/input.h>
+#include <string_view>
+#include <utility>
+
+#include "im/im.h"
+
+namespace areca {
+namespace {
+
+// ACK chỉ là mốc chờ tương đối; mọi Backspace vẫn đi tới ứng dụng.
+bool isBackspaceKey(const im::KeyEvent &event) {
+  return event.key().sym() == im::Key_BackSpace ||
+         event.rawKey().sym() == im::Key_BackSpace;
+}
+
+} // namespace
+
+UinputBackspaceBackend::UinputBackspaceBackend(im::EventLoop &eventLoop,
+                                               UinputDevice &device,
+                                               AdaptiveWait &adaptiveWait,
+                                               DebugProvider debugProvider)
+    : eventLoop_(eventLoop), device_(device), commitPost_(eventLoop),
+      adaptiveWait_(adaptiveWait), debugProvider_(std::move(debugProvider)) {}
+
+UinputBackspaceBackend::~UinputBackspaceBackend() { clearPending(); }
+
+bool UinputBackspaceBackend::isAvailable() { return device_.isAvailable(); }
+
+ApplyStatus UinputBackspaceBackend::apply(im::InputContext &inputContext,
+                                          const RewritePlan &plan,
+                                          RewriteDone onDone) {
+  if (hasPending() || !plan.transactionId || !device_.ensureDevice()) {
+    return ApplyStatus::Failed;
+  }
+
+  adaptiveWait_.beginTransaction();
+  transactionId_ = plan.transactionId;
+  inputContext_ = inputContext.watch();
+  onDone_ = std::move(onDone);
+  deletedCharacters_ = plan.backspaceCount;
+  // Chỉ phát đúng số Backspace cần xóa, không gửi thêm phím dư.
+  remainingBackspaces_ = deletedCharacters_;
+  sentBackspaces_ = 0;
+  backspacesSeen_ = 0;
+  // Kế hoạch không xóa ký tự nào không mở cửa sổ nhận Backspace xác nhận.
+  backspaceAckTimedOut_ = deletedCharacters_ == 0;
+  backspaceDelayMs_ = plan.backspaceDelayMs;
+  ackTimeoutMs_ = plan.uinputBackspaceAckTimeoutMs;
+  const char *frontend = inputContext.frontend();
+  afterBackspaceWaitMs_ = resolveAfterBackspaceWaitMs(frontend, plan);
+  timerAccuracyUsec_ = plan.timerAccuracyUsec;
+  commitText_ = plan.commitText;
+
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: uinput-backspace start tx=" << transactionId_
+                 << " backspaces=" << deletedCharacters_
+                 << " emit_backspaces=" << remainingBackspaces_
+                 << " delay_ms=" << backspaceDelayMs_
+                 << " after_wait_ms=" << afterBackspaceWaitMs_
+                 << " adaptive_extra_ms="
+                 << adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_)
+                 << " frontend=" << (frontend ? frontend : "")
+                 << " accuracy_us=" << timerAccuracyUsec_;
+  }
+
+  if (!deletedCharacters_) {
+    scheduleCommit();
+  } else {
+    sendNextBackspace();
+  }
+  return ApplyStatus::Pending;
+}
+
+void UinputBackspaceBackend::sendNextBackspace() {
+  auto *inputContext = inputContext_.get();
+  if (!inputContext) {
+    completeWithoutCommit();
+    return;
+  }
+
+  device_.sendKeyEvent(KEY_BACKSPACE, 1); // press
+  device_.sendKeyEvent(KEY_BACKSPACE, 0); // release
+
+  --remainingBackspaces_;
+  ++sentBackspaces_;
+
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: uinput-backspace sent tx=" << transactionId_
+                 << " sent=" << sentBackspaces_
+                 << " remaining=" << remainingBackspaces_;
+  }
+
+  if (remainingBackspaces_) {
+    scheduleNextBackspace();
+  } else if (commitWaitStarted_) {
+    // ACK sớm không được hủy chuỗi phát hay thay thế timer commit đang chạy.
+    // Nếu delay đã hết trước khi phát xong, chờ thêm sau phím cuối.
+    if (commitWaitElapsed_) {
+      scheduleCommit();
+    }
+  } else {
+    ackSentAtUsec_ = im::now(CLOCK_MONOTONIC);
+    schedule(ackTimeoutMs_, TimerDispatch::TimerCallback, [this]() {
+      if (debugProvider_()) {
+        ARECA_INFO() << "areca: uinput-backspace ack timeout tx="
+                     << transactionId_ << " seen=" << backspacesSeen_
+                     << " expected=" << deletedCharacters_;
+      }
+      backspaceAckTimedOut_ = true;
+      adaptiveWait_.observeAckTimeout();
+      scheduleCommit();
+    });
+  }
+}
+
+bool UinputBackspaceBackend::handleBackspace(im::KeyEvent &event) {
+  if (!hasPending() || event.inputContext() != inputContext_.get() ||
+      !isBackspaceKey(event)) {
+    return false;
+  }
+
+  if (event.isRelease()) {
+    if (debugProvider_()) {
+      ARECA_INFO() << "areca: uinput-backspace release tx=" << transactionId_
+                   << " event_time=" << event.time()
+                   << " keycode=" << event.rawKey().code() << " action=forward";
+    }
+    event.forward();
+    return true;
+  }
+
+  ++backspacesSeen_;
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: uinput-backspace press tx=" << transactionId_
+                 << " event_time=" << event.time()
+                 << " keycode=" << event.rawKey().code()
+                 << " seen=" << backspacesSeen_
+                 << " expected=" << deletedCharacters_ << " action=forward";
+  }
+  // Toàn bộ Backspace phát qua uinput đều là phím xóa thật cần chuyển xuống
+  // ứng dụng. Phím dội ngược đến muộn vẫn được forward tiếp để không nuốt nhầm
+  // thao tác xóa của người dùng.
+  event.forward();
+
+  // Chỉ kích hoạt commit đúng một lần khi vừa đếm đủ số lượng phím mong đợi.
+  // Nếu đã timeout thì callback hẹn giờ đã gọi commit trước đó, cờ này ngăn
+  // phím đến trễ kích hoạt commit lần thứ hai.
+  if (!commitWaitStarted_ && !backspaceAckTimedOut_ &&
+      backspacesSeen_ == deletedCharacters_) {
+    if (ackSentAtUsec_ > 0) {
+      const uint64_t roundtripUsec =
+          im::now(CLOCK_MONOTONIC) - ackSentAtUsec_;
+      ackSentAtUsec_ = 0;
+      adaptiveWait_.observeAckRoundtrip(roundtripUsec);
+    }
+    scheduleCommit();
+  }
+  return true;
+}
+
+void UinputBackspaceBackend::scheduleNextBackspace() {
+  const uint32_t delayMs =
+      adaptiveWait_.effectiveBackspaceDelayMs(backspaceDelayMs_);
+  schedule(
+      delayMs, TimerDispatch::TimerCallback, [this]() { sendNextBackspace(); },
+      true);
+}
+
+void UinputBackspaceBackend::scheduleCommit() {
+  commitWaitStarted_ = true;
+  commitWaitElapsed_ = false;
+  const uint32_t extraWaitMs =
+      adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_);
+  const uint32_t effectiveWaitMs =
+      adaptiveWait_.effectiveWaitMs(afterBackspaceWaitMs_);
+  if (debugProvider_() && extraWaitMs > 0) {
+    ARECA_INFO() << "areca: uinput-backspace adaptive commit wait tx="
+                 << transactionId_ << " base_ms=" << afterBackspaceWaitMs_
+                 << " extra_ms=" << extraWaitMs
+                 << " effective_ms=" << effectiveWaitMs;
+  }
+  // Timer chỉ đánh dấu đã chờ đủ. Commit được đưa sang pha post của event loop
+  // để công việc đang nghẽn được phản ánh vào độ trễ trước khi commit thật.
+  schedule(effectiveWaitMs, TimerDispatch::PostEvent,
+           [this, extraWaitMs]() { commitAfterAdaptiveWait(extraWaitMs); });
+}
+
+void UinputBackspaceBackend::commitAfterAdaptiveWait(
+    uint32_t appliedExtraWaitMs) {
+  if (remainingBackspaces_) {
+    commitWaitElapsed_ = true;
+    return;
+  }
+  const uint32_t currentExtraWaitMs =
+      adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_);
+  if (currentExtraWaitMs > appliedExtraWaitMs) {
+    const uint32_t additionalWaitMs = currentExtraWaitMs - appliedExtraWaitMs;
+    if (debugProvider_()) {
+      ARECA_INFO() << "areca: uinput-backspace lag before commit tx="
+                   << transactionId_
+                   << " additional_wait_ms=" << additionalWaitMs;
+    }
+    schedule(additionalWaitMs, TimerDispatch::PostEvent,
+             [this, currentExtraWaitMs]() {
+               commitAfterAdaptiveWait(currentExtraWaitMs);
+             });
+    return;
+  }
+  commitAndComplete();
+}
+
+void UinputBackspaceBackend::commitAndComplete() {
+  auto *inputContext = inputContext_.get();
+  if (!inputContext) {
+    completeWithoutCommit();
+    return;
+  }
+
+  if (!commitText_.empty()) {
+    inputContext->commitString(commitText_);
+  }
+
+  const uint64_t transactionId = transactionId_;
+  auto onDone = std::move(onDone_);
+  const auto adjustment = adaptiveWait_.completeTransaction();
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: uinput-backspace complete tx=" << transactionId
+                 << " sent=" << sentBackspaces_ << " commit=" << commitText_;
+    if (adjustment == AdaptiveWait::Adjustment::Decreased) {
+      ARECA_INFO() << "areca: uinput-backspace adaptive wait decayed tx="
+                   << transactionId << " extra_ms="
+                   << adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_);
+    }
+  }
+  clearPending();
+  if (onDone) {
+    onDone(transactionId, RewriteOutcome::Succeeded);
+  }
+}
+
+void UinputBackspaceBackend::completeWithoutCommit() {
+  const uint64_t transactionId = transactionId_;
+  auto onDone = std::move(onDone_);
+  adaptiveWait_.cancelTransaction();
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: uinput-backspace context lost tx=" << transactionId;
+  }
+  clearPending();
+  if (onDone) {
+    onDone(transactionId, RewriteOutcome::Succeeded);
+  }
+}
+
+void UinputBackspaceBackend::schedule(uint32_t delayMs, TimerDispatch dispatch,
+                                      std::function<void()> callback,
+                                      bool sending) {
+  auto &timer = sending ? sendTimer_ : timer_;
+  timer.reset();
+  const uint64_t deadline =
+      im::now(CLOCK_MONOTONIC) + static_cast<uint64_t>(delayMs) * 1000;
+  timer = eventLoop_.addTimeEvent(
+      CLOCK_MONOTONIC, deadline, timerAccuracyUsec_,
+      [this, deadline, dispatch, sending, callback = std::move(callback)](
+          im::EventSourceTime *, uint64_t) mutable {
+        auto completedTimer = std::move(sending ? sendTimer_ : timer_);
+        if (dispatch == TimerDispatch::PostEvent) {
+          dispatchPostEvent(deadline, std::move(callback));
+        } else {
+          observeAndRun(deadline, std::move(callback));
+        }
+        return false;
+      });
+  if (!timer) {
+    if (dispatch == TimerDispatch::PostEvent) {
+      dispatchPostEvent(deadline, std::move(callback));
+    } else {
+      observeAndRun(deadline, std::move(callback));
+    }
+    return;
+  }
+  timer->setOneShot();
+}
+
+void UinputBackspaceBackend::dispatchPostEvent(uint64_t deadlineUsec,
+                                               std::function<void()> callback) {
+  commitPost_.schedule([this, deadlineUsec, callback]() mutable {
+    observeAndRun(deadlineUsec, std::move(callback));
+  });
+}
+
+void UinputBackspaceBackend::observeAndRun(uint64_t deadlineUsec,
+                                           std::function<void()> callback) {
+  const uint64_t firedAtUsec = im::now(CLOCK_MONOTONIC);
+  const auto adjustment = adaptiveWait_.observeTimer(deadlineUsec, firedAtUsec);
+  if (debugProvider_() && adjustment != AdaptiveWait::Adjustment::None) {
+    ARECA_INFO() << "areca: uinput-backspace adaptive wait changed tx="
+                 << transactionId_ << " lateness_us="
+                 << (firedAtUsec > deadlineUsec ? firedAtUsec - deadlineUsec
+                                                : 0)
+                 << " extra_ms="
+                 << adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_);
+  }
+  callback();
+}
+
+void UinputBackspaceBackend::clearPending() {
+  timer_.reset();
+  sendTimer_.reset();
+  commitPost_.cancel();
+  inputContext_.unwatch();
+  onDone_ = {};
+  transactionId_ = 0;
+  deletedCharacters_ = 0;
+  remainingBackspaces_ = 0;
+  sentBackspaces_ = 0;
+  backspacesSeen_ = 0;
+  backspaceDelayMs_ = 0;
+  ackTimeoutMs_ = 150;
+  afterBackspaceWaitMs_ = 0;
+  timerAccuracyUsec_ = 1;
+  ackSentAtUsec_ = 0;
+  backspaceAckTimedOut_ = false;
+  commitWaitStarted_ = false;
+  commitWaitElapsed_ = false;
+  commitText_.clear();
+}
+
+} // namespace areca
