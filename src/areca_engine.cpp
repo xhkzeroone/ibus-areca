@@ -233,7 +233,6 @@ bool ArecaEngine::eraseFinalizedPreeditWord(
   plan.waylandAfterBackspaceWaitMs =
       schedulerTiming.waylandAfterBackspaceWaitMs;
   plan.ximAfterBackspaceWaitMs = schedulerTiming.ximAfterBackspaceWaitMs;
-  plan.fcitx4AfterBackspaceWaitMs = schedulerTiming.fcitx4AfterBackspaceWaitMs;
   plan.dbusAfterBackspaceWaitMs = schedulerTiming.dbusAfterBackspaceWaitMs;
   plan.ibusAfterBackspaceWaitMs = schedulerTiming.ibusAfterBackspaceWaitMs;
   plan.xtestBackspaceDelayMs = schedulerTiming.xtestBackspaceDelayMs;
@@ -242,8 +241,6 @@ bool ArecaEngine::eraseFinalizedPreeditWord(
       schedulerTiming.waylandAfterXTestBackspaceWaitMs;
   plan.ximAfterXTestBackspaceWaitMs =
       schedulerTiming.ximAfterXTestBackspaceWaitMs;
-  plan.fcitx4AfterXTestBackspaceWaitMs =
-      schedulerTiming.fcitx4AfterXTestBackspaceWaitMs;
   plan.dbusAfterXTestBackspaceWaitMs =
       schedulerTiming.dbusAfterXTestBackspaceWaitMs;
   plan.ibusAfterXTestBackspaceWaitMs =

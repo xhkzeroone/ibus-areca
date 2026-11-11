@@ -109,12 +109,6 @@ bool InputTypeDetector::canForwardBackspaces(
     return hasKeyEventOrderFix || hasSurrounding;
   }
 
-  if (frontend.starts_with("fcitx4")) {
-    const bool hasFormattedPreedit =
-        capabilities.test(im::CapabilityFlag::FormattedPreedit);
-    return hasFormattedPreedit || hasSurrounding;
-  }
-
   return false;
 }
 

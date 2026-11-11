@@ -165,7 +165,6 @@ int main() {
   assert(plan.afterXTestBackspaceWaitMs == 10);
   assert(plan.waylandAfterXTestBackspaceWaitMs == 10);
   assert(plan.ximAfterXTestBackspaceWaitMs == 10);
-  assert(plan.fcitx4AfterXTestBackspaceWaitMs == 10);
   assert(plan.dbusAfterXTestBackspaceWaitMs == 10);
   assert(plan.ibusAfterXTestBackspaceWaitMs == 10);
   assert(plan.surroundingWaitMs == 3);
@@ -177,20 +176,17 @@ int main() {
   assert(plan.afterUinputShiftSelectWaitMs == 10);
   assert(plan.waylandAfterUinputShiftSelectWaitMs == 5);
   assert(plan.ximAfterUinputShiftSelectWaitMs == 10);
-  assert(plan.fcitx4AfterUinputShiftSelectWaitMs == 10);
   assert(plan.dbusAfterUinputShiftSelectWaitMs == 10);
   assert(plan.ibusAfterUinputShiftSelectWaitMs == 10);
   plan.afterBackspaceWaitMs = 10;
   plan.waylandAfterBackspaceWaitMs = 3;
   plan.ximAfterBackspaceWaitMs = 10;
-  plan.fcitx4AfterBackspaceWaitMs = 10;
   plan.dbusAfterBackspaceWaitMs = 5;
   plan.ibusAfterBackspaceWaitMs = 7;
 
   plan.afterUinputShiftSelectWaitMs = 20;
   plan.waylandAfterUinputShiftSelectWaitMs = 8;
   plan.ximAfterUinputShiftSelectWaitMs = 20;
-  plan.fcitx4AfterUinputShiftSelectWaitMs = 20;
   plan.dbusAfterUinputShiftSelectWaitMs = 15;
   plan.ibusAfterUinputShiftSelectWaitMs = 17;
 
@@ -199,8 +195,6 @@ int main() {
   assert(resolveAfterBackspaceWaitMs("waylandim", plan) == 3);
   assert(resolveAfterBackspaceWaitMs("waylandfrontend", plan) == 3);
   assert(resolveAfterBackspaceWaitMs("xim", plan) == 10);
-  assert(resolveAfterBackspaceWaitMs("fcitx4", plan) == 10);
-  assert(resolveAfterBackspaceWaitMs("fcitx4frontend", plan) == 10);
   assert(resolveAfterBackspaceWaitMs("dbus", plan) == 5);
   assert(resolveAfterBackspaceWaitMs("dbusfrontend", plan) == 5);
   assert(resolveAfterBackspaceWaitMs("ibus", plan) == 7);
@@ -225,14 +219,12 @@ int main() {
   assert(resolveSurroundingDeleteDelayMs("waylandfrontend", plan) == 0);
   assert(resolveSurroundingDeleteDelayMs("dbus", plan) == 10);
   assert(resolveSurroundingDeleteDelayMs("xim", plan) == 10);
-  assert(resolveSurroundingDeleteDelayMs("fcitx4", plan) == 10);
   assert(resolveSurroundingDeleteDelayMs("unknown", plan) == 10);
   assert(resolveSurroundingDeleteDelayMs(nullptr, plan) == 10);
 
   plan.afterXTestBackspaceWaitMs = 12;
   plan.waylandAfterXTestBackspaceWaitMs = 4;
   plan.ximAfterXTestBackspaceWaitMs = 14;
-  plan.fcitx4AfterXTestBackspaceWaitMs = 11;
   plan.dbusAfterXTestBackspaceWaitMs = 6;
   plan.ibusAfterXTestBackspaceWaitMs = 9;
 
@@ -240,7 +232,6 @@ int main() {
   assert(resolveAfterXTestBackspaceWaitMs("wayland_v2", plan) == 4);
   assert(resolveAfterXTestBackspaceWaitMs("waylandim", plan) == 4);
   assert(resolveAfterXTestBackspaceWaitMs("xim", plan) == 14);
-  assert(resolveAfterXTestBackspaceWaitMs("fcitx4", plan) == 11);
   assert(resolveAfterXTestBackspaceWaitMs("dbus", plan) == 6);
   assert(resolveAfterXTestBackspaceWaitMs("ibus", plan) == 9);
   assert(resolveAfterXTestBackspaceWaitMs("ibusfrontend", plan) == 9);

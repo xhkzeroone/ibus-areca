@@ -171,10 +171,6 @@ ARECA_CONFIGURATION(
     im::Option<int, im::IntConstrain> ximAfterBackspaceWaitMs{
         this, "XimAfterBackspaceWaitMs", N_("Chờ sau Backspace cuối XIM (ms)"),
         10, im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> fcitx4AfterBackspaceWaitMs{
-        this, "Fcitx4AfterBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối Fcitx4 (ms)"), 10,
-        im::IntConstrain(0, 5000)};
     im::Option<int, im::IntConstrain> dbusAfterBackspaceWaitMs{
         this, "DbusAfterBackspaceWaitMs",
         N_("Chờ sau Backspace cuối DBus (ms)"), 10,
@@ -202,10 +198,6 @@ ARECA_CONFIGURATION(
     im::Option<int, im::IntConstrain> ximAfterUinputShiftSelectWaitMs{
         this, "XimAfterUinputShiftSelectWaitMs",
         N_("Chờ sau khi thả Shift uinput XIM (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> fcitx4AfterUinputShiftSelectWaitMs{
-        this, "Fcitx4AfterUinputShiftSelectWaitMs",
-        N_("Chờ sau khi thả Shift uinput Fcitx4 (ms)"), 10,
         im::IntConstrain(0, 5000)};
     im::Option<int, im::IntConstrain> dbusAfterUinputShiftSelectWaitMs{
         this, "DbusAfterUinputShiftSelectWaitMs",
@@ -249,10 +241,6 @@ ARECA_CONFIGURATION(
     im::Option<int, im::IntConstrain> ximAfterXTestBackspaceWaitMs{
         this, "XimAfterXTestBackspaceWaitMs",
         N_("Chờ sau Backspace cuối Native XIM (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> fcitx4AfterXTestBackspaceWaitMs{
-        this, "Fcitx4AfterXTestBackspaceWaitMs",
-        N_("Chờ sau Backspace cuối Native Fcitx4 (ms)"), 10,
         im::IntConstrain(0, 5000)};
     im::Option<int, im::IntConstrain> dbusAfterXTestBackspaceWaitMs{
         this, "DbusAfterXTestBackspaceWaitMs",

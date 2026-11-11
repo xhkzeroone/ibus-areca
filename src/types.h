@@ -22,7 +22,6 @@ struct RewritePlan {
   uint32_t afterBackspaceWaitMs = 10;
   uint32_t waylandAfterBackspaceWaitMs = 10;
   uint32_t ximAfterBackspaceWaitMs = 10;
-  uint32_t fcitx4AfterBackspaceWaitMs = 10;
   uint32_t dbusAfterBackspaceWaitMs = 10;
   uint32_t ibusAfterBackspaceWaitMs = 10;
 
@@ -31,7 +30,6 @@ struct RewritePlan {
   uint32_t afterUinputShiftSelectWaitMs = 10;
   uint32_t waylandAfterUinputShiftSelectWaitMs = 5;
   uint32_t ximAfterUinputShiftSelectWaitMs = 10;
-  uint32_t fcitx4AfterUinputShiftSelectWaitMs = 10;
   uint32_t dbusAfterUinputShiftSelectWaitMs = 10;
   uint32_t ibusAfterUinputShiftSelectWaitMs = 10;
 
@@ -44,7 +42,6 @@ struct RewritePlan {
   uint32_t afterXTestBackspaceWaitMs = 10;
   uint32_t waylandAfterXTestBackspaceWaitMs = 10;
   uint32_t ximAfterXTestBackspaceWaitMs = 10;
-  uint32_t fcitx4AfterXTestBackspaceWaitMs = 10;
   uint32_t dbusAfterXTestBackspaceWaitMs = 10;
   uint32_t ibusAfterXTestBackspaceWaitMs = 10;
 
@@ -65,9 +62,6 @@ inline uint32_t resolveAfterXTestBackspaceWaitMs(const char *frontendName,
   }
   if (fe.starts_with("xim")) {
     return plan.ximAfterXTestBackspaceWaitMs;
-  }
-  if (fe.starts_with("fcitx4")) {
-    return plan.fcitx4AfterXTestBackspaceWaitMs;
   }
   if (fe.starts_with("dbus")) {
     return plan.dbusAfterXTestBackspaceWaitMs;
@@ -91,9 +85,6 @@ inline uint32_t resolveAfterBackspaceWaitMs(const char *frontendName,
   if (fe.starts_with("xim")) {
     return plan.ximAfterBackspaceWaitMs;
   }
-  if (fe.starts_with("fcitx4")) {
-    return plan.fcitx4AfterBackspaceWaitMs;
-  }
   if (fe.starts_with("dbus")) {
     return plan.dbusAfterBackspaceWaitMs;
   }
@@ -115,9 +106,6 @@ inline uint32_t resolveAfterUinputShiftSelectWaitMs(const char *frontendName,
   }
   if (fe.starts_with("xim")) {
     return plan.ximAfterUinputShiftSelectWaitMs;
-  }
-  if (fe.starts_with("fcitx4")) {
-    return plan.fcitx4AfterUinputShiftSelectWaitMs;
   }
   if (fe.starts_with("dbus")) {
     return plan.dbusAfterUinputShiftSelectWaitMs;

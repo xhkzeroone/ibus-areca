@@ -296,11 +296,6 @@ int main() {
       ic.setCapabilityFlags(areca::im::CapabilityFlag::KeyEventOrderFix);
       assert(detector.canForwardBackspaces(ic));
     }
-    {
-      TestInputContext ic(manager, "app", "fcitx4frontend");
-      ic.setCapabilityFlags(areca::im::CapabilityFlag::FormattedPreedit);
-      assert(detector.canForwardBackspaces(ic));
-    }
 
     // D-Bus without KeyEventOrderFix and without SurroundingText -> false
     {

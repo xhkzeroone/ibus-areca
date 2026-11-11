@@ -135,7 +135,6 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &) {
       static_cast<uint32_t>(
           advancedConfig_.waylandAfterBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.ximAfterBackspaceWaitMs.value()),
-      static_cast<uint32_t>(advancedConfig_.fcitx4AfterBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.dbusAfterBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.ibusAfterBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.uinputShiftSelectDelayMs.value()),
@@ -147,8 +146,6 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &) {
           advancedConfig_.waylandAfterUinputShiftSelectWaitMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.ximAfterUinputShiftSelectWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.fcitx4AfterUinputShiftSelectWaitMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.dbusAfterUinputShiftSelectWaitMs.value()),
       static_cast<uint32_t>(
@@ -166,8 +163,6 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &) {
           advancedConfig_.waylandAfterXTestBackspaceWaitMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.ximAfterXTestBackspaceWaitMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.fcitx4AfterXTestBackspaceWaitMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.dbusAfterXTestBackspaceWaitMs.value()),
       static_cast<uint32_t>(

@@ -87,7 +87,6 @@ ADVANCED_DEFAULTS = {
     "AfterBackspaceWaitMs": 10,
     "WaylandAfterBackspaceWaitMs": 10,
     "XimAfterBackspaceWaitMs": 10,
-    "Fcitx4AfterBackspaceWaitMs": 10,
     "DbusAfterBackspaceWaitMs": 10,
     "IBusAfterBackspaceWaitMs": 10,
     "UinputShiftSelectDelayMs": 1,
@@ -95,7 +94,6 @@ ADVANCED_DEFAULTS = {
     "AfterUinputShiftSelectWaitMs": 10,
     "WaylandAfterUinputShiftSelectWaitMs": 5,
     "XimAfterUinputShiftSelectWaitMs": 10,
-    "Fcitx4AfterUinputShiftSelectWaitMs": 10,
     "DbusAfterUinputShiftSelectWaitMs": 10,
     "IBusAfterUinputShiftSelectWaitMs": 10,
     "SurroundingWaitMs": 3,
@@ -107,7 +105,6 @@ ADVANCED_DEFAULTS = {
     "AfterXTestBackspaceWaitMs": 10,
     "WaylandAfterXTestBackspaceWaitMs": 10,
     "XimAfterXTestBackspaceWaitMs": 10,
-    "Fcitx4AfterXTestBackspaceWaitMs": 10,
     "DbusAfterXTestBackspaceWaitMs": 10,
     "IBusAfterXTestBackspaceWaitMs": 10,
     "PostCommitDelayMs": 20,
@@ -1161,10 +1158,10 @@ class SettingsWindow(Gtk.ApplicationWindow):
     def _build_advanced(self) -> Gtk.Widget:
         page, content = self._page("Nâng cao", "Các giá trị timing và tương thích. Chỉ đổi khi ứng dụng gặp lỗi nhập liệu.")
         groups = [
-            ("Backspace", [("Delay giữa Backspace (ms)", "BackspaceDelayMs", 1000), ("Chờ sau Backspace (ms)", "AfterBackspaceWaitMs", 5000), ("Wayland", "WaylandAfterBackspaceWaitMs", 5000), ("XIM", "XimAfterBackspaceWaitMs", 5000), ("Fcitx4", "Fcitx4AfterBackspaceWaitMs", 5000), ("DBus", "DbusAfterBackspaceWaitMs", 5000), ("IBus", "IBusAfterBackspaceWaitMs", 5000)]),
-            ("Shift+Left", [("Delay giữa các phím (ms)", "UinputShiftSelectDelayMs", 1000), ("Chờ sau khi thả Shift (ms)", "AfterUinputShiftSelectWaitMs", 5000), ("Wayland", "WaylandAfterUinputShiftSelectWaitMs", 5000), ("XIM", "XimAfterUinputShiftSelectWaitMs", 5000), ("Fcitx4", "Fcitx4AfterUinputShiftSelectWaitMs", 5000), ("DBus", "DbusAfterUinputShiftSelectWaitMs", 5000), ("IBus", "IBusAfterUinputShiftSelectWaitMs", 5000)]),
+            ("Backspace", [("Delay giữa Backspace (ms)", "BackspaceDelayMs", 1000), ("Chờ sau Backspace (ms)", "AfterBackspaceWaitMs", 5000), ("Wayland", "WaylandAfterBackspaceWaitMs", 5000), ("XIM", "XimAfterBackspaceWaitMs", 5000), ("DBus", "DbusAfterBackspaceWaitMs", 5000), ("IBus", "IBusAfterBackspaceWaitMs", 5000)]),
+            ("Shift+Left", [("Delay giữa các phím (ms)", "UinputShiftSelectDelayMs", 1000), ("Chờ sau khi thả Shift (ms)", "AfterUinputShiftSelectWaitMs", 5000), ("Wayland", "WaylandAfterUinputShiftSelectWaitMs", 5000), ("XIM", "XimAfterUinputShiftSelectWaitMs", 5000), ("DBus", "DbusAfterUinputShiftSelectWaitMs", 5000), ("IBus", "IBusAfterUinputShiftSelectWaitMs", 5000)]),
             ("Surrounding text", [("Chờ sau xóa surrounding (ms)", "SurroundingWaitMs", 5000), ("Delay xóa surrounding v2 (ms)", "SurroundingDeleteDelayMs", 1000), ("Delay xóa v2 trên Wayland (ms)", "WaylandSurroundingDeleteDelayMs", 1000), ("Chờ sau lệnh xóa cuối (ms)", "AfterSurroundingDeleteWaitMs", 5000)]),
-            ("Native Backspace", [("Delay giữa Backspace Native (ms)", "XTestBackspaceDelayMs", 1000), ("Chờ sau Backspace Native (ms)", "AfterXTestBackspaceWaitMs", 5000), ("Wayland", "WaylandAfterXTestBackspaceWaitMs", 5000), ("XIM", "XimAfterXTestBackspaceWaitMs", 5000), ("Fcitx4", "Fcitx4AfterXTestBackspaceWaitMs", 5000), ("DBus", "DbusAfterXTestBackspaceWaitMs", 5000), ("IBus", "IBusAfterXTestBackspaceWaitMs", 5000)]),
+            ("Native Backspace", [("Delay giữa Backspace Native (ms)", "XTestBackspaceDelayMs", 1000), ("Chờ sau Backspace Native (ms)", "AfterXTestBackspaceWaitMs", 5000), ("Wayland", "WaylandAfterXTestBackspaceWaitMs", 5000), ("XIM", "XimAfterXTestBackspaceWaitMs", 5000), ("DBus", "DbusAfterXTestBackspaceWaitMs", 5000), ("IBus", "IBusAfterXTestBackspaceWaitMs", 5000)]),
         ]
         for title, values in groups:
             group = self._section(content, title)
