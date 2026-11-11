@@ -138,3 +138,34 @@ if(BUILD_TESTING)
     target_compile_definitions(mouse_click_tracker_test PRIVATE
         ARECA_MOUSE_HELPER_PATH="$<TARGET_FILE:mouse_click_tracker_helper>")
 endif()
+
+# Engine IBus chỉ build khi có libibus, để phần logic vẫn test được trên máy
+# chưa cài IBus.
+pkg_check_modules(IBUS QUIET IMPORTED_TARGET ibus-1.0)
+if(IBUS_FOUND)
+    set(ARECA_EXEC_PATH "${CMAKE_INSTALL_FULL_LIBEXECDIR}/ibus-engine-areca")
+    add_executable(ibus-engine-areca
+        src/ibus/ibus_engine.cpp
+        src/ibus/ibus_host.cpp
+        src/ibus/ibus_input_context.cpp
+        src/ibus/main.cpp
+    )
+    target_compile_options(ibus-engine-areca PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_definitions(ibus-engine-areca PRIVATE
+        ARECA_VERSION="${PROJECT_VERSION}"
+        ARECA_EXEC_PATH="${ARECA_EXEC_PATH}")
+    target_link_libraries(ibus-engine-areca PRIVATE areca-engine PkgConfig::IBUS)
+    install(TARGETS ibus-engine-areca DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
+
+    configure_file(data/areca.xml.in "${CMAKE_CURRENT_BINARY_DIR}/areca.xml" @ONLY)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/areca.xml"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/ibus/component")
+else()
+    message(STATUS "libibus not found: skipping ibus-engine-areca")
+endif()
+
+# Quyền /dev/uinput cho backend Backspace/Shift-select phần cứng và quyền đọc
+# chuột cho areca-mouse-monitor.
+install(FILES data/70-areca-pointer.rules data/99-uinput-areca.rules
+        DESTINATION "lib/udev/rules.d")
+
