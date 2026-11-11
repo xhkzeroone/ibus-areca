@@ -122,13 +122,36 @@ IBus từ kho phần mềm.
 
 ### 2. Cài Areca
 
+**Installer**, cần `curl` và `sudo`, cài gói dựng sẵn từ release mới nhất:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xhkzeroone/ibus-areca/main/install.sh | bash
+```
+
+**Arch Linux qua AUR:**
+
+```bash
+# Bản build từ release
+paru -S ibus-areca
+
+# Bản binary dựng sẵn
+paru -S ibus-areca-bin
+
+# Bản mới nhất từ mã nguồn Git
+paru -S ibus-areca-git
+```
+
+Có thể thay `paru` bằng `yay`.
+
+**Từ mã nguồn:**
+
 ```bash
 git clone --recurse-submodules https://github.com/xhkzeroone/ibus-areca.git
 cd ibus-areca
 ./scripts/install.sh
 ```
 
-Các tuỳ chọn hay dùng:
+Các tuỳ chọn hay dùng của `scripts/install.sh`:
 
 | Tuỳ chọn | Ý nghĩa |
 |---|---|
