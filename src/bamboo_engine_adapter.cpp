@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "utf8.h"
+#include "im/im.h"
 
 extern "C" {
 uint64_t ArecaBambooCreate(char *inputMethod, int modernStyle);
@@ -31,15 +31,16 @@ namespace {
 
 std::vector<std::pair<uint32_t, size_t>> codepoints(const std::string &text) {
   std::vector<std::pair<uint32_t, size_t>> result;
-  size_t offset = 0;
-  while (offset < text.size()) {
+  auto it = text.begin();
+  while (it != text.end()) {
+    const auto byteOffset = static_cast<size_t>(it - text.begin());
     uint32_t codepoint = 0;
-    const auto bytes = utf8::decode(text, offset, codepoint);
-    if (!bytes) {
+    auto next = im::utf8::getNextChar(it, text.end(), &codepoint);
+    if (!im::utf8::isValidChar(codepoint)) {
       throw std::runtime_error("Bamboo returned invalid UTF-8");
     }
-    result.emplace_back(codepoint, offset);
-    offset += bytes;
+    result.emplace_back(codepoint, byteOffset);
+    it = next;
   }
   result.emplace_back(0, text.size());
   return result;

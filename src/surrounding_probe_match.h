@@ -4,17 +4,24 @@
 #include <string>
 #include <string_view>
 
-#include "utf8.h"
+#include "im/im.h"
 
 namespace areca {
 
 inline bool textBeforeCursor(std::string_view text, uint32_t cursor,
                              std::string_view &before) {
-  const auto length = utf8::length(text);
-  if (length == utf8::kInvalid || cursor > length) {
+  if (!im::utf8::validate(text) || cursor > im::utf8::length(text)) {
     return false;
   }
-  before = text.substr(0, utf8::byteLength(text, cursor));
+  if (cursor == 0) {
+    before = {};
+    return true;
+  }
+  const auto bytes = im::utf8::ncharByteLength(text.begin(), cursor);
+  if (bytes < 0) {
+    return false;
+  }
+  before = text.substr(0, static_cast<std::size_t>(bytes));
   return true;
 }
 
@@ -65,12 +72,15 @@ surroundingProbeMatches(bool actualValid, std::string_view originalText,
 
   // Some clients move the cursor first and remove the character afterward.
   // Do not mistake that intermediate state for a completed deletion.
-  if (actualCursor < utf8::length(actualText)) {
-    const auto cursorByte = utf8::byteLength(actualText, actualCursor);
-    const auto firstDeletedBytes = utf8::byteLength(deleted, 1);
-    if (cursorByte != utf8::kInvalid && firstDeletedBytes != utf8::kInvalid &&
-        actualText.substr(cursorByte, firstDeletedBytes) ==
-            deleted.substr(0, firstDeletedBytes)) {
+  if (actualCursor < im::utf8::length(actualText)) {
+    const auto cursorByte =
+        im::utf8::ncharByteLength(actualText.begin(), actualCursor);
+    const auto firstDeletedBytes =
+        im::utf8::ncharByteLength(deleted.begin(), 1);
+    if (cursorByte >= 0 && firstDeletedBytes > 0 &&
+        actualText.substr(static_cast<std::size_t>(cursorByte),
+                          static_cast<std::size_t>(firstDeletedBytes)) ==
+            deleted.substr(0, static_cast<std::size_t>(firstDeletedBytes))) {
       return false;
     }
   }
@@ -89,11 +99,13 @@ inline void updateKnownTextBeforeCursor(std::string &known,
                                         uint32_t deleteCount,
                                         std::string_view inserted) {
   if (deleteCount > 0) {
-    const auto length = utf8::length(known);
-    if (length == utf8::kInvalid || length <= deleteCount) {
+    const auto length = im::utf8::lengthValidated(known);
+    if (length == im::utf8::INVALID_LENGTH || length <= deleteCount) {
       known.clear();
     } else {
-      known.erase(utf8::byteLength(known, length - deleteCount));
+      const auto keepBytes = im::utf8::ncharByteLength(
+          known.begin(), static_cast<int>(length - deleteCount));
+      known.erase(static_cast<std::size_t>(keepBytes));
     }
   }
   known.append(inserted);

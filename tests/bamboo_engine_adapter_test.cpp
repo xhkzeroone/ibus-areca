@@ -3,8 +3,9 @@
 #include <iostream>
 #include <string>
 
+#include "im/im.h"
+
 #include "bamboo_engine_adapter.h"
-#include "utf8.h"
 
 namespace {
 
@@ -13,10 +14,11 @@ areca::BambooResult type(areca::BambooEngineAdapter &engine, char key) {
 }
 
 void applyToDisplay(std::string &display, const areca::BambooResult &result) {
-  const auto displayLength = areca::utf8::length(display);
+  const auto displayLength = areca::im::utf8::length(display);
   assert(displayLength >= result.deleteCount);
-  display.erase(
-      areca::utf8::byteLength(display, displayLength - result.deleteCount));
+  const auto eraseFrom = areca::im::utf8::nextNChar(
+      display.begin(), displayLength - result.deleteCount);
+  display.erase(eraseFrom, display.end());
   display += result.commitText;
 }
 
@@ -66,11 +68,12 @@ int main() {
   std::string display;
   for (char key : std::string("chuaarn")) {
     const auto result = type(engine, key);
-    const auto displayLength = areca::utf8::length(display);
+    const auto displayLength = areca::im::utf8::length(display);
     assert(displayLength >= result.deleteCount);
     if (result.deleteCount) {
-      display.erase(
-          areca::utf8::byteLength(display, displayLength - result.deleteCount));
+      const auto eraseFrom = areca::im::utf8::nextNChar(
+          display.begin(), displayLength - result.deleteCount);
+      display.erase(eraseFrom, display.end());
     }
     display += result.commitText;
   }
@@ -136,9 +139,10 @@ int main() {
   display.clear();
   for (char key : std::string("awbc")) {
     const auto result = type(engine, key);
-    const auto displayLength = areca::utf8::length(display);
-    display.erase(
-        areca::utf8::byteLength(display, displayLength - result.deleteCount));
+    const auto displayLength = areca::im::utf8::length(display);
+    const auto eraseFrom = areca::im::utf8::nextNChar(
+        display.begin(), displayLength - result.deleteCount);
+    display.erase(eraseFrom, display.end());
     display += result.commitText;
   }
   assert(display == "awbc");
@@ -234,7 +238,7 @@ int main() {
                                              charset);
     type(encodedEngine, 'a');
     const auto encodedResult = type(encodedEngine, 's');
-    assert(areca::utf8::validate(encodedResult.newText));
+    assert(areca::im::utf8::validate(encodedResult.newText));
   }
 
   areca::BambooEngineAdapter vniEngine("VNI");
