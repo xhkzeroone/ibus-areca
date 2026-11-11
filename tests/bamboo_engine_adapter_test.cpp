@@ -1,0 +1,424 @@
+#include <algorithm>
+#include <cassert>
+#include <iostream>
+#include <string>
+
+#include "bamboo_engine_adapter.h"
+#include "utf8.h"
+
+namespace {
+
+areca::BambooResult type(areca::BambooEngineAdapter &engine, char key) {
+  return engine.process(static_cast<unsigned char>(key), std::string(1, key));
+}
+
+void applyToDisplay(std::string &display, const areca::BambooResult &result) {
+  const auto displayLength = areca::utf8::length(display);
+  assert(displayLength >= result.deleteCount);
+  display.erase(
+      areca::utf8::byteLength(display, displayLength - result.deleteCount));
+  display += result.commitText;
+}
+
+} // namespace
+
+int main() {
+  areca::BambooEngineAdapter engine("Telex 2");
+
+  // Handler phải hỏi đúng rule Bamboo thay vì đoán theo nhóm Unicode: dấu câu
+  // là boundary trong Telex 2, còn phím ngoặc vẫn là phím tạo ơ/ư.
+  assert(engine.canProcessKey('a'));
+  assert(engine.canProcessKey('['));
+  assert(!engine.canProcessKey(' '));
+  assert(!engine.canProcessKey('.'));
+  assert(!engine.canProcessKey(0x00D7));
+
+  auto a = type(engine, 'a');
+  assert(a.currentText.empty());
+  assert(a.newText == "a");
+  assert(a.deleteCount == 0);
+  assert(a.commitText == "a");
+
+  auto w = type(engine, 'w');
+  assert(w.currentText == "a");
+  assert(w.newText == "ă");
+  assert(w.deleteCount == 1);
+  assert(w.commitText == "ă");
+
+  engine.backspace();
+  engine.reset();
+  a = type(engine, 'a');
+  w = type(engine, 'w');
+
+  auto n = type(engine, 'n');
+  assert(n.currentText == "ă");
+  assert(n.newText == "ăn");
+  assert(n.deleteCount == 0);
+  assert(n.commitText == "n");
+
+  auto space = type(engine, ' ');
+  assert(space.currentText == "ăn");
+  assert(space.newText.empty());
+  assert(space.deleteCount == 0);
+  assert(space.commitText == " ");
+
+  engine.reset();
+  std::string display;
+  for (char key : std::string("chuaarn")) {
+    const auto result = type(engine, key);
+    const auto displayLength = areca::utf8::length(display);
+    assert(displayLength >= result.deleteCount);
+    if (result.deleteCount) {
+      display.erase(
+          areca::utf8::byteLength(display, displayLength - result.deleteCount));
+    }
+    display += result.commitText;
+  }
+  assert(display == "chuẩn");
+
+  // Crossing a word boundary with Backspace restores the finalized Bamboo
+  // composition, so the previous word can still be edited.
+  engine.reset();
+  display.clear();
+  for (char key : std::string("as ")) {
+    applyToDisplay(display, type(engine, key));
+  }
+  assert(display == "á ");
+  display.pop_back();
+  engine.backspace();
+  const auto retonePreviousWord = type(engine, 'f');
+  assert(retonePreviousWord.currentText == "á");
+  applyToDisplay(display, retonePreviousWord);
+  assert(display == "à");
+
+  // Multiple trailing boundaries must all be crossed before restoring the
+  // preceding word.
+  engine.reset();
+  display.clear();
+  for (char key : std::string("as  ")) {
+    applyToDisplay(display, type(engine, key));
+  }
+  assert(display == "á  ");
+  display.pop_back();
+  engine.backspace();
+  display.pop_back();
+  engine.backspace();
+  const auto retoneAfterTwoSpaces = type(engine, 'f');
+  assert(retoneAfterTwoSpaces.currentText == "á");
+  applyToDisplay(display, retoneAfterTwoSpaces);
+  assert(display == "à");
+
+  engine.reset();
+  display.clear();
+  for (char key : std::string("as ")) {
+    applyToDisplay(display, type(engine, key));
+  }
+  display.pop_back();
+  engine.backspace();
+  display.clear();
+  engine.backspace();
+  const auto afterDeletingPreviousWord = type(engine, 'b');
+  assert(afterDeletingPreviousWord.currentText.empty());
+  applyToDisplay(display, afterDeletingPreviousWord);
+  assert(display == "b");
+
+  engine.reset();
+  display.clear();
+  for (char key : std::string("as b")) {
+    applyToDisplay(display, type(engine, key));
+  }
+  const auto newWordTone = type(engine, 's');
+  assert(newWordTone.currentText == "b");
+
+  // With real-time spell check, an invalid Vietnamese-looking syllable
+  // is restored to the original Latin keystrokes immediately.
+  engine.reset();
+  display.clear();
+  for (char key : std::string("awbc")) {
+    const auto result = type(engine, key);
+    const auto displayLength = areca::utf8::length(display);
+    display.erase(
+        areca::utf8::byteLength(display, displayLength - result.deleteCount));
+    display += result.commitText;
+  }
+  assert(display == "awbc");
+  auto checkedBoundary = type(engine, ' ');
+  assert(checkedBoundary.currentText == "awbc");
+  assert(checkedBoundary.deleteCount == 0);
+  assert(checkedBoundary.commitText == " ");
+
+  areca::BambooEngineAdapter uncheckedEngine("Telex 2", false, false);
+  for (char key : std::string("awbc")) {
+    type(uncheckedEngine, key);
+  }
+  auto uncheckedBoundary = type(uncheckedEngine, ' ');
+  assert(uncheckedBoundary.currentText == "ăbc");
+  assert(uncheckedBoundary.deleteCount == 0);
+  assert(uncheckedBoundary.commitText == " ");
+
+  // Khôi phục toàn bộ từ đã commit phải dựng lại cả các phím tạo dấu. Nhờ đó
+  // nhấn lại đúng phím dấu vẫn giữ hành vi toggle tự nhiên của Bamboo.
+  engine.reset();
+  assert(engine.restoreFromRenderedText("Chào"));
+  display = "Chào";
+  const auto restoredTone = type(engine, 'f');
+  applyToDisplay(display, restoredTone);
+  assert(display == "Chaof");
+
+  engine.reset();
+  assert(engine.restoreFromRenderedText("tưởng"));
+  display = "tưởng";
+  applyToDisplay(display, type(engine, 's'));
+  assert(display == "tướng");
+
+  // Khi cả prefix `tiế` chưa phải âm tiết hoàn chỉnh, handler có thể thu hẹp
+  // tới nguyên âm sát caret. Suffix trong app vẫn tạo `tiế|n` + f -> `tiề|n`.
+  engine.reset();
+  assert(engine.restoreFromRenderedText("ế"));
+  display = "ế";
+  applyToDisplay(display, type(engine, 'f'));
+  assert(display == "ề");
+
+  // Input rỗng bị từ chối và không được làm mất composition đang hoạt động.
+  const auto beforeRejectedRestore = engine.currentText();
+  assert(!engine.restoreFromRenderedText(""));
+  assert(engine.currentText() == beforeRejectedRestore);
+
+  for (const auto &[method, word] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"Telex", "đúng"},
+           {"VNI", "tưởng"},
+           {"VIQR", "Chào"},
+           {"Microsoft layout", "đấ"}}) {
+    areca::BambooEngineAdapter restoredEngine(method);
+    assert(restoredEngine.restoreFromRenderedText(word));
+    assert(restoredEngine.currentText() == word);
+  }
+
+  areca::BambooEngineAdapter basicSpellcheckEngine("Telex 2", true, false);
+  for (char key : std::string("awbc")) {
+    type(basicSpellcheckEngine, key);
+  }
+  auto basicBoundary = type(basicSpellcheckEngine, ' ');
+  assert(basicBoundary.currentText == "ăbc");
+  assert(basicBoundary.deleteCount == 3);
+  assert(basicBoundary.commitText == "awbc ");
+
+  areca::BambooEngineAdapter modernToneEngine("Telex 2", true, true, true);
+  areca::BambooEngineAdapter traditionalToneEngine("Telex 2", true, true,
+                                                   false);
+  areca::BambooResult modernTone;
+  areca::BambooResult traditionalTone;
+  for (char key : std::string("hoaf")) {
+    modernTone = type(modernToneEngine, key);
+    traditionalTone = type(traditionalToneEngine, key);
+  }
+  assert(modernTone.newText == "hoà");
+  assert(traditionalTone.newText == "hòa");
+
+  const auto inputMethods = areca::BambooEngineAdapter::inputMethodNames();
+  assert(std::find(inputMethods.begin(), inputMethods.end(), "VNI") !=
+         inputMethods.end());
+  assert(std::find(inputMethods.begin(), inputMethods.end(), "VIQR") !=
+         inputMethods.end());
+  for (const auto &inputMethod : inputMethods) {
+    areca::BambooEngineAdapter availableMethod(inputMethod);
+    assert(availableMethod.valid());
+  }
+  const auto charsets = areca::BambooEngineAdapter::charsetNames();
+  assert(!charsets.empty() && charsets.front() == "Unicode");
+  assert(std::find(charsets.begin(), charsets.end(), "Unicode tổ hợp") !=
+         charsets.end());
+  for (const auto &charset : charsets) {
+    areca::BambooEngineAdapter encodedEngine("Telex 2", true, true, true,
+                                             charset);
+    type(encodedEngine, 'a');
+    const auto encodedResult = type(encodedEngine, 's');
+    assert(areca::utf8::validate(encodedResult.newText));
+  }
+
+  areca::BambooEngineAdapter vniEngine("VNI");
+  assert(vniEngine.canProcessKey('1'));
+  assert(!vniEngine.canProcessKey(' '));
+  areca::BambooResult vniResult;
+  for (char key : std::string("a61")) {
+    vniResult = type(vniEngine, key);
+  }
+  assert(vniResult.newText == "ấ");
+
+  areca::BambooEngineAdapter viqrEngine("VIQR");
+  assert(viqrEngine.canProcessKey('.'));
+
+  areca::BambooEngineAdapter combiningEngine("Telex 2", true, true, true,
+                                             "Unicode tổ hợp");
+  type(combiningEngine, 'a');
+  const auto combiningResult = type(combiningEngine, 's');
+  assert(combiningResult.newText == "a\u0301");
+  assert(combiningResult.deleteCount == 0);
+  assert(combiningResult.commitText == "\u0301");
+
+  const std::vector<areca::MacroDefinition> macros = {{"bt", "Be There"},
+                                                      {"vn", "Việt Nam"}};
+  areca::BambooEngineAdapter macroEngine("Telex 2", true, true, true, "Unicode",
+                                         true, true, macros);
+  display.clear();
+  for (char key : std::string("bt ")) {
+    const auto result = type(macroEngine, key);
+    applyToDisplay(display, result);
+    if (key == ' ') {
+      assert(result.macroExpanded);
+    }
+  }
+  assert(display == "be there ");
+
+  macroEngine.reset();
+  display.clear();
+  for (const char key : std::string("bt")) {
+    applyToDisplay(display, type(macroEngine, key));
+  }
+  const auto bypassedMacro = macroEngine.processWithoutMacro(' ', " ");
+  assert(!bypassedMacro.macroExpanded);
+  applyToDisplay(display, bypassedMacro);
+  assert(display == "bt ");
+
+  areca::BambooEngineAdapter uppercaseMacroEngine(
+      "Telex 2", true, true, true, "Unicode", true, true, macros);
+  display.clear();
+  for (char key : std::string("BT ")) {
+    applyToDisplay(display, type(uppercaseMacroEngine, key));
+  }
+  assert(display == "BE THERE ");
+
+  const std::vector<areca::MacroDefinition> vietnameseMacros = {
+      {"tv", "tiếng việt"}};
+  areca::BambooEngineAdapter titlecaseMacroEngine(
+      "Telex 2", true, true, true, "Unicode", true, true, vietnameseMacros);
+  display.clear();
+  for (char key : std::string("Tv ")) {
+    applyToDisplay(display, type(titlecaseMacroEngine, key));
+  }
+  assert(display == "Tiếng Việt ");
+
+  display.clear();
+  for (char key : std::string("TV ")) {
+    applyToDisplay(display, type(titlecaseMacroEngine, key));
+  }
+  assert(display == "TIẾNG VIỆT ");
+
+  display.clear();
+  for (char key : std::string("tv ")) {
+    applyToDisplay(display, type(titlecaseMacroEngine, key));
+  }
+  assert(display == "tiếng việt ");
+
+  areca::BambooEngineAdapter disabledMacroEngine(
+      "Telex 2", true, true, true, "Unicode", false, true, macros);
+  display.clear();
+  for (char key : std::string("bt ")) {
+    applyToDisplay(display, type(disabledMacroEngine, key));
+  }
+  assert(display == "bt ");
+
+  areca::BambooEngineAdapter encodedMacroEngine(
+      "Telex 2", true, true, true, "Unicode tổ hợp", true, false, macros);
+  display.clear();
+  for (char key : std::string("vn ")) {
+    applyToDisplay(display, type(encodedMacroEngine, key));
+  }
+  assert(display == "Viê\u0323t Nam ");
+
+  // Test macro undo on Backspace:
+  areca::BambooEngineAdapter undoEngine(
+      "Telex 2", true, true, true, "Unicode", true, true,
+      {{"k", "không"}, {"dtncs", "đoàn thanh niên cộng sản hồ chí minh"}});
+
+  display = "50";
+  for (char key : std::string("k.")) {
+    applyToDisplay(display, type(undoEngine, key));
+  }
+  assert(display == "50không.");
+  assert(undoEngine.canUndoMacro());
+  auto undoPeriodResult = undoEngine.processBackspace();
+  applyToDisplay(display, undoPeriodResult);
+  assert(display == "50k.");
+  assert(!undoEngine.canUndoMacro());
+
+  display = "50";
+  for (char key : std::string("k ")) {
+    applyToDisplay(display, type(undoEngine, key));
+  }
+  assert(display == "50không ");
+  assert(undoEngine.canUndoMacro());
+  auto undoSpaceResult = undoEngine.processBackspace();
+  applyToDisplay(display, undoSpaceResult);
+  assert(display == "50k ");
+  assert(!undoEngine.canUndoMacro());
+
+  display.clear();
+  for (char key : std::string("dtncs.")) {
+    applyToDisplay(display, type(undoEngine, key));
+  }
+  assert(display == "đoàn thanh niên cộng sản hồ chí minh.");
+  assert(undoEngine.canUndoMacro());
+  auto undoLongResult = undoEngine.processBackspace();
+  applyToDisplay(display, undoLongResult);
+  assert(display == "dtncs.");
+  assert(!undoEngine.canUndoMacro());
+
+  display = "50";
+  for (char key : std::string("k.")) {
+    applyToDisplay(display, type(undoEngine, key));
+  }
+  assert(display == "50không.");
+  assert(undoEngine.canUndoMacro());
+  type(undoEngine, 'a');
+  assert(!undoEngine.canUndoMacro());
+
+  // Test macro undo disabled when revertMacroOnBackspace is false:
+  areca::BambooEngineAdapter disabledUndoEngine("Telex 2", true, true, true,
+                                                "Unicode", true, true,
+                                                {{"k", "không"}}, false);
+
+  display = "50";
+  for (char key : std::string("k.")) {
+    applyToDisplay(display, type(disabledUndoEngine, key));
+  }
+  assert(display == "50không.");
+  assert(!disabledUndoEngine.canUndoMacro());
+
+  // Test spellcheck mistake recovery on Backspace:
+  // Typing "nhanhsh", calling processBackspace restores "nhánh"
+  engine.reset();
+  display.clear();
+  for (char key : std::string("nhanhsh")) {
+    applyToDisplay(display, type(engine, key));
+  }
+  assert(display == "nhanhsh");
+  auto backspaceResult = engine.processBackspace();
+  applyToDisplay(display, backspaceResult);
+  assert(display == "nhánh");
+
+  // Rewrite và Preedit đều có thể gọi processBackspace liên tiếp; Bamboo tự
+  // quyết định khi nào chuỗi raw còn lại dựng lại được thành tiếng Việt.
+  engine.reset();
+  display.clear();
+  for (char key : std::string("nhanhshhh")) {
+    applyToDisplay(display, type(engine, key));
+  }
+  for (int i = 0; i < 3; ++i) {
+    applyToDisplay(display, engine.processBackspace());
+  }
+  assert(display == "nhánh");
+
+  // Plain backspace only syncs Bamboo state for a forwarded physical key. It
+  // must not run spellcheck recovery behind the BackspaceRecovery option.
+  engine.reset();
+  for (char key : std::string("nhanhsh")) {
+    type(engine, key);
+  }
+  engine.backspace();
+  assert(engine.currentText() == "nhanhs");
+
+  std::cout << "Bamboo adapter tests passed\n";
+  return 0;
+}

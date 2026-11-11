@@ -1,0 +1,475 @@
+package main
+
+/*
+#include <stdint.h>
+#include <stdlib.h>
+*/
+import "C"
+
+import (
+	"sort"
+	"strings"
+	"sync"
+	"unicode"
+	"unicode/utf8"
+
+	bamboo "github.com/BambooEngine/bamboo-core"
+)
+
+var engines = struct {
+	sync.Mutex
+	next   uint64
+	byID   map[uint64]bamboo.IEngine
+	macros map[uint64]map[string]string
+}{next: 1, byID: make(map[uint64]bamboo.IEngine), macros: make(map[uint64]map[string]string)}
+
+//export ArecaBambooCreate
+func ArecaBambooCreate(inputMethod *C.char, modernStyle C.int) C.uint64_t {
+	name := "Telex 2"
+	if inputMethod != nil && C.GoString(inputMethod) != "" {
+		name = C.GoString(inputMethod)
+	}
+	method := bamboo.ParseInputMethod(bamboo.InputMethodDefinitions, name)
+	if method.Name == "" {
+		return 0
+	}
+	flags := uint(bamboo.EstdFlags)
+	// ModernStyle selects oà/uý, while the Bamboo standard-tone flag selects
+	// òa/úy.
+	if modernStyle != 0 {
+		flags &^= bamboo.EstdToneStyle
+	}
+	engine := bamboo.NewEngine(method, flags)
+	engines.Lock()
+	id := engines.next
+	engines.next++
+	engines.byID[id] = engine
+	engines.macros[id] = make(map[string]string)
+	engines.Unlock()
+	return C.uint64_t(id)
+}
+
+//export ArecaBambooDestroy
+func ArecaBambooDestroy(id C.uint64_t) {
+	engines.Lock()
+	delete(engines.byID, uint64(id))
+	delete(engines.macros, uint64(id))
+	engines.Unlock()
+}
+
+//export ArecaBambooAddMacro
+func ArecaBambooAddMacro(id C.uint64_t, key *C.char, value *C.char) {
+	if key == nil || value == nil {
+		return
+	}
+	normalizedKey := strings.ToLower(C.GoString(key))
+	macroValue := C.GoString(value)
+	if normalizedKey == "" || macroValue == "" {
+		return
+	}
+	engines.Lock()
+	defer engines.Unlock()
+	if table := engines.macros[uint64(id)]; table != nil {
+		table[normalizedKey] = macroValue
+	}
+}
+
+func toTitleCase(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	startOfWord := true
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			if startOfWord {
+				b.WriteRune(unicode.ToUpper(r))
+				startOfWord = false
+			} else {
+				b.WriteRune(unicode.ToLower(r))
+			}
+		} else if unicode.IsMark(r) {
+			b.WriteRune(r)
+		} else {
+			startOfWord = true
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func matchMacroCase(key string, value string) string {
+	runes := []rune(key)
+	if len(runes) == 0 {
+		return value
+	}
+
+	var letters []rune
+	for _, r := range runes {
+		if unicode.IsLetter(r) {
+			letters = append(letters, r)
+		}
+	}
+
+	if len(letters) == 0 {
+		return value
+	}
+
+	allLower := true
+	allUpper := true
+	for _, r := range letters {
+		if unicode.IsUpper(r) {
+			allLower = false
+		}
+		if unicode.IsLower(r) {
+			allUpper = false
+		}
+	}
+
+	if allLower {
+		return strings.ToLower(value)
+	}
+	if allUpper {
+		return strings.ToUpper(value)
+	}
+
+	if unicode.IsUpper(letters[0]) {
+		restLower := true
+		for _, r := range letters[1:] {
+			if !unicode.IsLower(r) {
+				restLower = false
+				break
+			}
+		}
+		if restLower {
+			return toTitleCase(value)
+		}
+	}
+
+	return value
+}
+
+//export ArecaBambooExpandMacro
+func ArecaBambooExpandMacro(id C.uint64_t, capitalize C.int) *C.char {
+	engine := engineFor(id)
+	if engine == nil {
+		return nil
+	}
+	key := engine.GetProcessedString(bamboo.PunctuationMode)
+	engines.Lock()
+	value := engines.macros[uint64(id)][strings.ToLower(key)]
+	engines.Unlock()
+	if value == "" {
+		return nil
+	}
+	if capitalize != 0 {
+		value = matchMacroCase(key, value)
+	}
+	return C.CString(value)
+}
+
+func engineFor(id C.uint64_t) bamboo.IEngine {
+	engines.Lock()
+	defer engines.Unlock()
+	return engines.byID[uint64(id)]
+}
+
+//export ArecaBambooInputMethodNames
+func ArecaBambooInputMethodNames() *C.char {
+	preferred := map[string]int{
+		"Telex": 0, "Telex 2": 1, "VNI": 2, "VIQR": 3,
+		"Telex + VNI": 4, "Telex + VNI + VIQR": 5,
+		"Microsoft layout": 6, "VNI Bàn phím tiếng Pháp": 7,
+	}
+	names := make([]string, 0, len(bamboo.InputMethodDefinitions))
+	for name := range bamboo.InputMethodDefinitions {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		left, leftPreferred := preferred[names[i]]
+		right, rightPreferred := preferred[names[j]]
+		if leftPreferred != rightPreferred {
+			return leftPreferred
+		}
+		if leftPreferred {
+			return left < right
+		}
+		return names[i] < names[j]
+	})
+	return C.CString(strings.Join(names, "\n"))
+}
+
+//export ArecaBambooCharsetNames
+func ArecaBambooCharsetNames() *C.char {
+	names := bamboo.GetCharsetNames()
+	sort.Slice(names[1:], func(i, j int) bool {
+		return names[i+1] < names[j+1]
+	})
+	return C.CString(strings.Join(names, "\n"))
+}
+
+//export ArecaBambooEncode
+func ArecaBambooEncode(charset *C.char, input *C.char) *C.char {
+	if input == nil {
+		return nil
+	}
+	charsetName := bamboo.UNICODE
+	if charset != nil && C.GoString(charset) != "" {
+		charsetName = C.GoString(charset)
+	}
+	return C.CString(bamboo.Encode(charsetName, C.GoString(input)))
+}
+
+//export ArecaBambooCanProcess
+func ArecaBambooCanProcess(id C.uint64_t, key C.uint32_t) C.int {
+	engine := engineFor(id)
+	if engine != nil && engine.CanProcessKey(rune(key)) {
+		return 1
+	}
+	return 0
+}
+
+//export ArecaBambooProcess
+func ArecaBambooProcess(id C.uint64_t, key C.uint32_t, spellCheck C.int,
+	spellcheckRestored *C.int) *C.char {
+	engine := engineFor(id)
+	if engine == nil {
+		return nil
+	}
+	if spellcheckRestored != nil {
+		*spellcheckRestored = 0
+	}
+	prevText := engine.GetProcessedString(bamboo.VietnameseMode)
+
+	engine.ProcessKey(rune(key), bamboo.VietnameseMode)
+
+	text := engine.GetProcessedString(bamboo.VietnameseMode)
+	if spellCheck != 0 && bamboo.HasAnyVietnameseRune(text) && !engine.IsValid(false) {
+		if spellcheckRestored != nil {
+			*spellcheckRestored = 1
+		}
+		if !bamboo.HasAnyVietnameseRune(prevText) {
+			for engine.GetProcessedString(bamboo.VietnameseMode) != "" {
+				engine.RemoveLastChar(true)
+			}
+			engine.ProcessString(prevText+string(rune(key)), bamboo.EnglishMode)
+			text = engine.GetProcessedString(bamboo.VietnameseMode)
+		} else {
+			engine.RestoreLastWord(false)
+			text = engine.GetProcessedString(bamboo.EnglishMode)
+		}
+	}
+
+	return C.CString(text)
+}
+
+func renderKeys(inputMethod bamboo.InputMethod, flags uint, keys string) string {
+	engine := bamboo.NewEngine(inputMethod, flags)
+	engine.ProcessString(keys, bamboo.VietnameseMode)
+	return engine.GetProcessedString(bamboo.VietnameseMode)
+}
+
+func engineFlags(engine bamboo.IEngine) uint {
+	// bamboo-core hiện có GetFlag trên concrete engine nhưng chưa đưa method này
+	// vào IEngine. Type assertion giữ bridge tương thích mà không phải sửa API của
+	// submodule; fallback dùng đúng cờ mặc định lúc Areca tạo engine.
+	if reader, ok := engine.(interface{ GetFlag(uint) uint }); ok {
+		return reader.GetFlag(0)
+	}
+	return bamboo.EstdFlags
+}
+
+func baseWordAndEffects(target string) (string, map[uint8]bool, map[uint8]bool) {
+	var base strings.Builder
+	marks := make(map[uint8]bool)
+	tones := make(map[uint8]bool)
+	for _, char := range target {
+		tone := bamboo.FindToneFromChar(char)
+		if tone != bamboo.ToneNone {
+			tones[uint8(tone)] = true
+		}
+		toneless := bamboo.AddToneToChar(char, uint8(bamboo.ToneNone))
+		if mark, found := bamboo.FindMarkFromChar(toneless); found && mark != bamboo.MarkNone {
+			marks[uint8(mark)] = true
+			toneless = bamboo.AddMarkToChar(toneless, uint8(bamboo.MarkNone))
+		}
+		base.WriteRune(toneless)
+	}
+	return base.String(), marks, tones
+}
+
+func directWord(inputMethod bamboo.InputMethod, target string) string {
+	var direct strings.Builder
+	for _, char := range target {
+		toneless := bamboo.AddToneToChar(char, uint8(bamboo.ToneNone))
+		key := rune(0)
+		for _, rule := range inputMethod.Rules {
+			if rule.EffectType == bamboo.Appending && rule.EffectOn == toneless {
+				key = rule.Key
+				break
+			}
+		}
+		if key == 0 {
+			markless := bamboo.AddMarkToChar(toneless, uint8(bamboo.MarkNone))
+			direct.WriteRune(markless)
+		} else {
+			direct.WriteRune(key)
+		}
+	}
+	return direct.String()
+}
+
+func restorationEffectKeys(inputMethod bamboo.InputMethod, marks, tones map[uint8]bool) []rune {
+	seen := make(map[rune]bool)
+	var keys []rune
+	for _, rule := range inputMethod.Rules {
+		wanted := rule.EffectType == bamboo.MarkTransformation && marks[rule.Effect]
+		wanted = wanted || rule.EffectType == bamboo.ToneTransformation && tones[rule.Effect]
+		if wanted && !seen[rule.Key] {
+			seen[rule.Key] = true
+			keys = append(keys, rule.Key)
+		}
+	}
+	return keys
+}
+
+func findRenderedRestoreKeys(engine bamboo.IEngine, target string) (string, bool) {
+	inputMethod := engine.GetInputMethod()
+	flags := engineFlags(engine)
+	base, marks, tones := baseWordAndEffects(target)
+	effectKeys := restorationEffectKeys(inputMethod, marks, tones)
+	targetLength := utf8.RuneCountInString(target)
+	seeds := []string{base}
+	if direct := directWord(inputMethod, target); direct != base {
+		// Một số layout như Microsoft Vietnamese có phím nhập trực tiếp ă/â/đ
+		// thay vì biến đổi chữ cái đứng trước. Seed thứ hai phục hồi đúng các
+		// layout đó mà không làm nhánh phổ biến Telex/VNI chậm hơn.
+		seeds = append(seeds, direct)
+	}
+
+	for _, seed := range seeds {
+		if renderKeys(inputMethod, flags, seed) == target {
+			return seed, true
+		}
+		if len(effectKeys) == 0 {
+			continue
+		}
+
+		// Chỉ thử các phím tạo đúng loại dấu xuất hiện trong từ đích. Mỗi nhánh
+		// phải giữ nguyên số ký tự; phím dấu nào rơi xuống thành ký tự thường sẽ
+		// làm chuỗi dài hơn và bị loại ngay, tránh tìm kiếm tổ hợp vô hạn.
+		maxDepth := len(marks) + len(tones) + 1
+		if maxDepth > 4 {
+			maxDepth = 4
+		}
+		frontier := []string{seed}
+		for depth := 0; depth < maxDepth; depth++ {
+			var nextFrontier []string
+			for _, prefix := range frontier {
+				for _, key := range effectKeys {
+					candidate := prefix + string(key)
+					rendered := renderKeys(inputMethod, flags, candidate)
+					if utf8.RuneCountInString(rendered) != targetLength {
+						continue
+					}
+					if rendered == target {
+						return candidate, true
+					}
+					nextFrontier = append(nextFrontier, candidate)
+				}
+			}
+			frontier = nextFrontier
+		}
+	}
+	return "", false
+}
+
+//export ArecaBambooRestore
+func ArecaBambooRestore(id C.uint64_t, visibleText *C.char) C.int {
+	engine := engineFor(id)
+	if engine == nil || visibleText == nil {
+		return 0
+	}
+	target := C.GoString(visibleText)
+	if target == "" || !utf8.ValidString(target) {
+		return 0
+	}
+
+	keys, found := findRenderedRestoreKeys(engine, target)
+	if !found {
+		return 0
+	}
+
+	// Chỉ thay trạng thái thật sau khi một engine tạm đã chứng minh chuỗi phím
+	// phục hồi hiển thị đúng target. Nếu kiểm tra thất bại, composition hiện tại
+	// của người dùng được giữ nguyên.
+	if renderKeys(engine.GetInputMethod(), engineFlags(engine), keys) != target {
+		return 0
+	}
+	engine.Reset()
+	engine.ProcessString(keys, bamboo.VietnameseMode)
+	return 1
+}
+
+//export ArecaBambooFinalizeWord
+func ArecaBambooFinalizeWord(id C.uint64_t, spellCheck C.int,
+	spellcheckRestored *C.int) *C.char {
+	engine := engineFor(id)
+	if engine == nil {
+		return nil
+	}
+	if spellcheckRestored != nil {
+		*spellcheckRestored = 0
+	}
+
+	text := engine.GetProcessedString(bamboo.VietnameseMode)
+	if spellCheck != 0 && bamboo.HasAnyVietnameseRune(text) && !engine.IsValid(true) {
+		if spellcheckRestored != nil {
+			*spellcheckRestored = 1
+		}
+		engine.RestoreLastWord(false)
+		text = engine.GetProcessedString(bamboo.EnglishMode)
+	}
+	// Keep the finalized composition alive. The C++ adapter resets it lazily
+	// when a new word starts, or reuses it when Backspace crosses the trailing
+	// word boundary.
+	return C.CString(text)
+}
+
+//export ArecaBambooBackspace
+func ArecaBambooBackspace(id C.uint64_t) *C.char {
+	engine := engineFor(id)
+	if engine == nil {
+		return nil
+	}
+	engine.RemoveLastChar(true)
+	return C.CString(engine.GetProcessedString(bamboo.VietnameseMode))
+}
+
+//export ArecaBambooRecoverBackspace
+func ArecaBambooRecoverBackspace(id C.uint64_t) *C.char {
+	engine := engineFor(id)
+	if engine == nil {
+		return nil
+	}
+	engine.RemoveLastChar(true)
+	text := engine.GetProcessedString(bamboo.VietnameseMode)
+	rawText := engine.GetProcessedString(bamboo.EnglishMode)
+	if rawText != "" && text == rawText {
+		tempEngine := bamboo.NewEngine(engine.GetInputMethod(), bamboo.EstdFlags)
+		tempEngine.ProcessString(rawText, bamboo.VietnameseMode)
+		if tempEngine.IsValid(false) {
+			engine.Reset()
+			engine.ProcessString(rawText, bamboo.VietnameseMode)
+			text = engine.GetProcessedString(bamboo.VietnameseMode)
+		}
+	}
+	return C.CString(text)
+}
+
+//export ArecaBambooReset
+func ArecaBambooReset(id C.uint64_t) {
+	if engine := engineFor(id); engine != nil {
+		engine.Reset()
+	}
+}
+
+func main() {}
