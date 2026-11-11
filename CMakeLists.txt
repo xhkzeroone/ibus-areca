@@ -164,6 +164,21 @@ else()
     message(STATUS "libibus not found: skipping ibus-engine-areca")
 endif()
 
+# App cài đặt GTK sửa thẳng các file conf; engine tự nạp lại khi file đổi.
+install(FILES gtk-settings/areca_settings.py gtk-settings/icon_library.py
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/ibus-areca/gtk-settings")
+install(DIRECTORY gtk-settings/assets
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/ibus-areca/gtk-settings")
+install(FILES "icons/hicolor/scalable/apps/areca-settings.svg"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/ibus-areca/icons/hicolor/scalable/apps")
+install(DIRECTORY icons/hicolor DESTINATION "${CMAKE_INSTALL_DATADIR}/icons")
+configure_file(data/areca-settings-launcher.in ibus-areca-settings @ONLY)
+install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/ibus-areca-settings"
+        DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES "data/areca-settings.desktop"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
+        RENAME "io.github.areca.IBusSettings.desktop")
+
 # Quyền /dev/uinput cho backend Backspace/Shift-select phần cứng và quyền đọc
 # chuột cho areca-mouse-monitor.
 install(FILES data/70-areca-pointer.rules data/99-uinput-areca.rules
