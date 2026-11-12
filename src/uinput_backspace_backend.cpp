@@ -129,17 +129,29 @@ bool UinputBackspaceBackend::handleBackspace(im::KeyEvent &event) {
     return true;
   }
 
+  const bool repeat = event.key().states().test(im::KeyState::Repeat) ||
+                      event.rawKey().states().test(im::KeyState::Repeat);
+  if (repeat && backspacesSeen_ >= deletedCharacters_) {
+    if (debugProvider_()) {
+      ARECA_INFO() << "areca: uinput-backspace duplicate replay suppressed"
+                   << " tx=" << transactionId_ << " event_time=" << event.time()
+                   << " keycode=" << event.rawKey().code();
+    }
+    event.filterAndAccept();
+    return true;
+  }
+
   ++backspacesSeen_;
   if (debugProvider_()) {
     ARECA_INFO() << "areca: uinput-backspace press tx=" << transactionId_
                  << " event_time=" << event.time()
-                 << " keycode=" << event.rawKey().code()
+                 << " keycode=" << event.rawKey().code() << " repeat=" << repeat
+                 << " forwarded=" << event.isForwarded()
                  << " seen=" << backspacesSeen_
                  << " expected=" << deletedCharacters_ << " action=forward";
   }
-  // Toàn bộ Backspace phát qua uinput đều là phím xóa thật cần chuyển xuống
-  // ứng dụng. Phím dội ngược đến muộn vẫn được forward tiếp để không nuốt nhầm
-  // thao tác xóa của người dùng.
+  // Backspace đã được phát qua uinput; chuyển event xác nhận này xuống app.
+  // Press lặp vượt số lượng đang chờ là GTK replay và bị chặn ở nhánh trên.
   event.forward();
 
   // Chỉ kích hoạt commit đúng một lần khi vừa đếm đủ số lượng phím mong đợi.
