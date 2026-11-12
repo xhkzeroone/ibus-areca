@@ -24,7 +24,7 @@ from icon_library import (
 
 
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ibus-areca" / "conf"
-APP_VERSION = "v8.3.2"  # Update manually when preparing a release.
+APP_VERSION = "v0.1.0"  # Keep in sync with project(... VERSION ...) in CMakeLists.txt.
 MAIN_FILE = "areca.conf"
 MACRO_FILE = "areca-macro-table.conf"
 APPS_FILE = "areca-apps.conf"
@@ -1478,7 +1478,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         report_button = self._about_action("Báo lỗi", "bug")
         report_button.connect(
             "clicked", self._open_about_link,
-            "https://github.com/xhkzeroone/ArecaIME/issues/new", "Đang mở GitHub Issues…",
+            "https://github.com/xhkzeroone/ibus-areca/issues/new", "Đang mở GitHub Issues…",
         )
         restart_button = self._about_action("Khởi động lại IBus", "refresh")
         restart_button.set_tooltip_text("Khởi động lại ibus-daemon để nạp lại engine Areca")
@@ -1487,7 +1487,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         update_button.add_css_class("suggested-action")
         update_button.connect(
             "clicked", self._open_about_link,
-            "https://github.com/xhkzeroone/ArecaIME/releases/latest", "Đang mở bản phát hành mới nhất…",
+            "https://github.com/xhkzeroone/ibus-areca/releases/latest", "Đang mở bản phát hành mới nhất…",
         )
         actions.append(report_button)
         actions.append(restart_button)

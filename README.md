@@ -527,7 +527,7 @@ Xin cảm ơn những người đã đóng góp trực tiếp cho Areca:
 </table>
 
 Danh sách đầy đủ xem tại
-[trang contributors](https://github.com/xhkzeroone/ArecaIME/graphs/contributors).
+[trang contributors](https://github.com/xhkzeroone/ibus-areca/graphs/contributors).
 
 Xin chân thành cảm ơn các anh, chị, em trong cộng đồng đã dành thời gian trải
 nghiệm Areca, báo lỗi, gửi log và chia sẻ những ý tưởng quý báu. Mỗi phản hồi

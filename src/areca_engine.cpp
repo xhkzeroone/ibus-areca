@@ -254,8 +254,8 @@ void ArecaEngine::notifyUinputUnavailable() {
       "Areca không thể khởi tạo uinput",
       "Hãy kiểm tra quyền truy cập /dev/uinput và bảo đảm module uinput đã "
       "được bật, sau đó khởi động lại IBus. Xem hướng dẫn khởi nạp uinput "
-      "và cấp quyền tại https://github.com/xhkzeroone/ArecaIME#khởi-nạp-"
-      "uinput-và-cấp-quyền",
+      "và cấp quyền tại https://github.com/xhkzeroone/ibus-areca#uinput-và-"
+      "quyền-truy-cập",
       15000);
 }
 
