@@ -90,7 +90,7 @@ Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và 
 - **Log engine người dùng dán:** chỉ lấy các dòng quyết định, đừng diễn giải từng dòng. Các mẫu cần tìm:
   `rewrite select backend|reliability first-probe|stale during probe|probe succeeded|surrounding restore|reset rejected|app reset|bamboo result`.
 - **Gợi ý cho người dùng lệnh lọc sẵn** thay vì xin cả log:
-  `ibus-daemon -rxv 2>&1 | grep -E "<mẫu ở trên>"` (bật `Debug=True` trong `~/.config/ibus-areca/conf/areca.conf`).
+  `journalctl --user -f -t ibus-engine-areca | grep -E "<mẫu ở trên>"` (bật `Debug=True` trong `~/.config/ibus-areca/conf/areca.conf`).
 - **Build và test:** chỉ in phần cần, ví dụ
   `cmake --build build -j"$(nproc)" 2>&1 | grep -E "error|warning:"` và `ctest --test-dir build 2>&1 | grep -E "tests passed|failed"`.
   Chỉ chạy `--output-on-failure` khi có test hỏng.

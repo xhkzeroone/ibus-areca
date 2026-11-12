@@ -838,7 +838,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         ]:
             self._switch(behavior, title, key, description)
         diagnostics = self._section(content, "Chẩn đoán")
-        self._switch(diagnostics, "Bật log debug Areca", "Debug", "Log được ghi ra stderr của ibus-daemon.")
+        self._switch(diagnostics, "Bật log debug Areca", "Debug", "Xem log bằng: journalctl --user -f -t ibus-engine-areca")
         return page
 
     def _build_macros(self) -> Gtk.Widget:

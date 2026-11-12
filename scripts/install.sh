@@ -375,6 +375,6 @@ Next:
       GTK_IM_MODULE=ibus gnome-text-editor   (or QT_IM_MODULE=ibus kwrite)
   - Settings:  ibus-areca-settings
   - Debug log: set Debug=True in ~/.config/ibus-areca/conf/areca.conf, then run
-      ibus-daemon -rxv   in a terminal (without -d); engine log appears there.
+      journalctl --user -f -t ibus-engine-areca
 EOF
 fi

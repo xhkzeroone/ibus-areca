@@ -389,17 +389,20 @@ printenv | grep -E '^(XMODIFIERS|GTK_IM_MODULE|QT_IM_MODULE|SDL_IM_MODULE)='
 
 1. Bật **Bật log debug Areca** trong cấu hình nâng cao, hoặc đặt `Debug=True`
    trong `~/.config/ibus-areca/conf/areca.conf`.
-2. Chạy IBus ngay trong terminal để thấy log của engine:
+2. Engine ghi log vào journal. Theo dõi trực tiếp:
 
    ```bash
-   ibus-daemon -rxv
+   journalctl --user -f -t ibus-engine-areca
    ```
 
-3. Chỉ lấy các dòng quan trọng:
+3. Chỉ lấy các dòng quan trọng từ lần khởi động hiện tại:
 
    ```bash
-   ibus-daemon -rxv 2>&1 | grep --line-buffered -E 'areca.*(rewrite select backend|reliability|probe|surrounding restore|reset rejected|uinput|failed|timeout)'
+   journalctl --user -b -t ibus-engine-areca --no-pager | grep -E 'areca.*(rewrite select backend|reliability|probe|surrounding restore|reset rejected|uinput|failed|timeout)'
    ```
+
+Chạy `ibus-daemon -rxv` trong terminal (không có `-d`) thì log in thẳng ra
+terminal đó thay vì vào journal.
 
 ## Build từ mã nguồn
 

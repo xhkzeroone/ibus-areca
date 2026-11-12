@@ -2,6 +2,7 @@
 
 #include "ibus/ibus_engine.h"
 #include "ibus/ibus_host.h"
+#include "im/log_writer.h"
 
 namespace {
 
@@ -27,6 +28,8 @@ void onDisconnected(IBusBus *, gpointer) { ibus_quit(); }
 } // namespace
 
 int main(int argc, char **argv) {
+  g_set_prgname("ibus-engine-areca");
+  areca::im::installLogWriter();
   gboolean ibusMode = FALSE;
   GOptionEntry entries[] = {
       {"ibus", 'i', 0, G_OPTION_ARG_NONE, &ibusMode,

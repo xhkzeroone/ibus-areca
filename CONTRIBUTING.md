@@ -112,7 +112,7 @@ Bot Claude tự review PR mở từ nhánh trong repo, dựa trên các quy tắ
 
 1. Kiểm tra danh sách [Issues đã có](https://github.com/xhkzeroone/ibus-areca/issues) trước khi tạo mới.
 2. Cung cấp thông tin Distro Linux, Desktop Environment và ứng dụng phát sinh lỗi.
-3. Đính kèm log debug từ lệnh `ibus-daemon -rxv 2>&1 | grep areca` nếu có, sau khi đặt `Debug=True` trong `~/.config/ibus-areca/conf/areca.conf`.
+3. Đính kèm log debug từ lệnh `journalctl --user -b -t ibus-engine-areca` nếu có, sau khi đặt `Debug=True` trong `~/.config/ibus-areca/conf/areca.conf`.
 
 ---
 

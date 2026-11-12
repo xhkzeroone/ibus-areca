@@ -67,8 +67,8 @@ body:
       description: Log debug của engine nếu có.
       placeholder: |
         Đặt Debug=True trong ~/.config/ibus-areca/conf/areca.conf,
-        chạy lệnh sau trong terminal, tái hiện lỗi rồi dán kết quả vào đây:
-        ibus-daemon -rxv 2>&1 | grep areca
+        tái hiện lỗi, rồi chạy lệnh sau và dán kết quả vào đây:
+        journalctl --user -b -t ibus-engine-areca --no-pager | tail -n 200
       render: shell
     validations:
       required: false
