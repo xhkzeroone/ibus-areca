@@ -5,6 +5,7 @@
 
 #include <ibus.h>
 
+#include "ibus/ibus_key_event_clock.h"
 #include "im/im.h"
 
 namespace areca {
@@ -41,8 +42,7 @@ private:
   void updateLookupTable();
 
   IBusEngine *engine_;
-  // IBus không đánh dấu phím lặp; press đến khi phím đó chưa nhả là lặp.
-  guint heldKeyval_ = 0;
+  IbusKeyEventClock keyEventClock_;
   bool showingInformation_ = false;
   std::unique_ptr<im::EventSourceTime> informationTimer_;
 };

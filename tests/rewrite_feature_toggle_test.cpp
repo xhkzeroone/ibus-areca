@@ -7,6 +7,7 @@
 #include "im/im.h"
 
 #include "areca_config.h"
+#include "ibus/ibus_key_event_clock.h"
 #include "input_scheduler.h"
 #include "rewrite_mode.h"
 
@@ -165,9 +166,26 @@ void testForwardedBackspaceReplay() {
   assert(state->forwardedBackspacePresses.empty());
 }
 
+void testIbusReplayUsesOriginalBackspaceTime() {
+  areca::IbusKeyEventClock clock;
+  constexpr uint32_t backspace = areca::im::Key_BackSpace;
+  const auto original = clock.stamp(backspace, true, false, false, 1000);
+  const auto replay = clock.stamp(backspace, true, false, true, 1003);
+  assert(!original.repeat);
+  assert(replay.repeat);
+  assert(original.time == replay.time);
+
+  const auto release = clock.stamp(backspace, true, true, false, 1010);
+  assert(release.time == original.time);
+  const auto nextTap = clock.stamp(backspace, true, false, false, 1300);
+  assert(!nextTap.repeat);
+  assert(nextTap.time != original.time);
+}
+
 } // namespace
 
 int main() {
+  testIbusReplayUsesOriginalBackspaceTime();
   testForwardedBackspaceReplay();
   // Macro undo phải chặn cứng auto-repeat và chỉ xử lý đúng một lần khi thả
   // Backspace, giống BackspaceRecovery thường.

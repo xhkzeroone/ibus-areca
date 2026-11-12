@@ -58,23 +58,21 @@ void IbusInputContext::setClient(const std::string &client) {
 bool IbusInputContext::processKeyEvent(guint keyval, guint keycode,
                                        guint state) {
   const bool release = state & IBUS_RELEASE_MASK;
+  const bool forwarded = state & IBUS_FORWARD_MASK;
   auto states = im::KeyStates::fromInteger(
       state & ~static_cast<guint>(IBUS_RELEASE_MASK | IBUS_FORWARD_MASK |
                                   IBUS_IGNORED_MASK | IBUS_HANDLED_MASK));
-  if (release) {
-    if (heldKeyval_ == keyval) {
-      heldKeyval_ = 0;
-    }
-  } else {
-    if (heldKeyval_ == keyval) {
-      states.set(im::KeyState::Repeat);
-    }
-    heldKeyval_ = keyval;
+  const auto nowMs = static_cast<gint>(
+      (static_cast<guint64>(g_get_monotonic_time() / 1000)) & 0x7fffffffU);
+  const auto stamp = keyEventClock_.stamp(keyval, keyval == IBUS_KEY_BackSpace,
+                                          release, forwarded, nowMs);
+  if (stamp.repeat) {
+    states.set(im::KeyState::Repeat);
   }
   // Keycode của Areca theo X11, bằng keycode evdev cộng 8.
   const im::Key key(static_cast<im::KeySym>(keyval), states,
                     static_cast<int>(keycode) + 8);
-  im::KeyEvent event(this, key, release);
+  im::KeyEvent event(this, key, release, stamp.time);
   IbusHost::instance().engine().keyEvent(event);
   return event.filtered();
 }
