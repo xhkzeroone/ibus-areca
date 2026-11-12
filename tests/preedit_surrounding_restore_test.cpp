@@ -443,7 +443,8 @@ int main() {
              ->engine->currentText()
              .empty());
 
-  // IBus không gắn Repeat: nhấn giữ hủy khôi phục từ đã commit.
+  // IBus không gắn Repeat; IbusKeyEventClock gắn cờ này cho press khi phím chưa
+  // nhả. Nhấn giữ hủy khôi phục từ đã commit.
   {
     TestInputContext ibusContext(manager);
     handler.activate(ibusContext);
@@ -460,7 +461,8 @@ int main() {
     assert(press.accepted());
     for (int i = 0; i < 3; ++i) {
       areca::im::KeyEvent repeat(&ibusContext,
-                                 areca::im::Key(areca::im::Key_BackSpace));
+                                 areca::im::Key(areca::im::Key_BackSpace,
+                                                areca::im::KeyState::Repeat));
       handler.handleKeyEvent(repeat);
       assert(!repeat.accepted());
       assert(ibusState->composing.empty());

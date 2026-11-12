@@ -421,18 +421,30 @@ void RewriteModeHandler::handleKeyEvent(im::KeyEvent &event) {
       return;
     }
     if (state->backspaceRecoveryAwaitingRelease) {
-      // IBus có thể gửi press lặp mà không có cờ Repeat. Press tiếp theo
-      // trước release là nhấn giữ; phím inject đã được loại ở các guard trên.
+      // IBus không gửi cờ Repeat; engine IBus tự đặt cờ này cho press đến khi
+      // phím chưa nhả, nên press tiếp theo trước release là nhấn giữ. Phím
+      // inject đã được loại ở các guard trên.
+      if (isRepeat) {
+        if (debugProvider_()) {
+          ARECA_INFO() << "areca: backspace route=forward"
+                       << " reason=repeat-reset-composition"
+                       << " repeat=" << isRepeat
+                       << " program=" << inputContext->program();
+        }
+        resetContext(*inputContext);
+        state->forwardedBackspacePresses.emplace(event.time(),
+                                                 event.rawKey().code());
+        event.forward();
+        return;
+      }
       if (debugProvider_()) {
-        ARECA_INFO() << "areca: backspace route=forward"
-                     << " reason=repeat-reset-composition"
-                     << " repeat=" << isRepeat
+        ARECA_INFO() << "areca: backspace route=recovery"
+                     << " reason=awaiting-release"
+                     << " current=" << state->engine->currentText()
+                     << " queue=" << scheduler_.queuedKeyCount()
                      << " program=" << inputContext->program();
       }
-      resetContext(*inputContext);
-      state->forwardedBackspacePresses.emplace(event.time(),
-                                               event.rawKey().code());
-      event.forward();
+      event.filterAndAccept();
       return;
     }
     if (state->engine && state->engine->canUndoMacro()) {

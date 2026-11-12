@@ -209,15 +209,14 @@ void PreeditModeHandler::handleKeyEvent(im::KeyEvent &event) {
   }
 
   if (isBackspace) {
-    // IBus có thể gửi press lặp không có Repeat khi đang chờ khôi phục từ.
-    const bool heldPress = state->finalizedWordRecovery ==
-                           FinalizedWordRecoveryState::AwaitingBackspaceRelease;
+    // IBus không gửi cờ Repeat; engine IBus tự đặt cờ này cho press đến khi
+    // phím chưa nhả, kể cả lúc đang chờ khôi phục từ.
     state->sentenceCapitalization.reset();
-    if (isRepeat || heldPress) {
+    if (isRepeat) {
       if (debugProvider_()) {
         ARECA_INFO() << "areca: preedit backspace route=forward"
                      << " reason=repeat-reset-composition"
-                     << " repeat=" << isRepeat << " held_press=" << heldPress;
+                     << " repeat=" << isRepeat;
       }
       // Giữ nguyên phần chữ người dùng đang thấy, nhưng bỏ toàn bộ trạng thái
       // Bamboo để chuỗi Backspace repeat tiếp tục xóa trực tiếp trong app.

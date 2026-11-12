@@ -171,11 +171,10 @@ int main() {
   testForwardedBackspaceReplay();
   // Macro undo phải chặn cứng auto-repeat và chỉ xử lý đúng một lần khi thả
   // Backspace, giống BackspaceRecovery thường.
-  // GNOME/IBus gửi các press lặp không kèm cờ Repeat.
-  for (bool ibusWithoutRepeatFlag : {false, true}) {
-    const auto repeatState = ibusWithoutRepeatFlag
-                                 ? areca::im::KeyState::NoState
-                                 : areca::im::KeyState::Repeat;
+  // GNOME/IBus gửi các press lặp không kèm cờ Repeat; IbusKeyEventClock gắn
+  // cờ này trước khi phím tới lõi.
+  {
+    const auto repeatState = areca::im::KeyState::Repeat;
     areca::im::EventLoop loop;
     areca::im::InputContextManager manager;
     areca::RewriteModeHandler::StateFactory factory(
