@@ -24,7 +24,7 @@ from icon_library import (
 
 
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ibus-areca" / "conf"
-APP_VERSION = "v0.1.1"  # Keep in sync with project(... VERSION ...) in CMakeLists.txt.
+APP_VERSION = "v0.1.2"  # Keep in sync with project(... VERSION ...) in CMakeLists.txt.
 MAIN_FILE = "areca.conf"
 MACRO_FILE = "areca-macro-table.conf"
 APPS_FILE = "areca-apps.conf"
@@ -172,20 +172,51 @@ class ConfigDocument:
         except FileNotFoundError:
             self.lines = []
 
-    def get(self, section: str, key: str, default: str = "") -> str:
+    def get(self, section: str, key: str,
+            default: str | None = "") -> str | None:
         current = ""
         for line in self.lines:
             match = re.match(r"^\s*\[([^]]+)\]\s*$", line)
             if match:
                 current = match.group(1)
                 continue
-            if current == section:
-                item = re.match(r"^\s*([^#;=]+?)\s*=\s*(.*?)\s*$", line)
-                if item and item.group(1).strip() == key:
+            item = re.match(r"^\s*([^#;=]+?)\s*=\s*(.*?)\s*$", line)
+            if item and item.group(1).strip() == key:
+                if current == section:
                     return decode_value(item.group(2))
         return default
 
+    def misplaced_value(self, key: str) -> str | None:
+        current = ""
+        misplaced = None
+        for line in self.lines:
+            header = re.match(r"^\s*\[([^]]+)\]\s*$", line)
+            if header:
+                current = header.group(1)
+                continue
+            item = re.match(r"^\s*([^#;=]+?)\s*=\s*(.*?)\s*$", line)
+            if current and item and item.group(1).strip() == key:
+                misplaced = decode_value(item.group(2))
+        return misplaced
+
+    def remove_misplaced(self, section: str, key: str) -> bool:
+        current = ""
+        kept = []
+        for line in self.lines:
+            header = re.match(r"^\s*\[([^]]+)\]\s*$", line)
+            if header:
+                current = header.group(1)
+            item = re.match(r"^\s*([^#;=]+?)\s*=", line)
+            if current != section and item and item.group(1).strip() == key:
+                continue
+            kept.append(line)
+        changed = len(kept) != len(self.lines)
+        self.lines = kept
+        return changed
+
     def set(self, section: str, key: str, value: str) -> None:
+        if not section:
+            self.remove_misplaced("", key)
         current = ""
         section_start = None
         section_end = len(self.lines)
@@ -214,7 +245,7 @@ class ConfigDocument:
                 self.lines.append("")
             self.lines.extend([f"[{section}]", assignment])
         else:
-            self.lines.append(assignment)
+            self.lines.insert(section_end, assignment)
 
     def replace_indexed(self, prefix: str, entries: list[dict[str, str]]) -> None:
         updated = []
@@ -312,9 +343,31 @@ class ConfigDocument:
 class ConfigStore:
     def __init__(self):
         self.main = ConfigDocument(CONFIG_DIR / MAIN_FILE)
+        main_root_keys = {
+            "PresentationMode", "SwitchModeKey", "SelectBackendKey",
+            "BackspaceDelayMs", "AfterBackspaceWaitMs", "PostCommitDelayMs",
+            "TrayIcon", *MAIN_DEFAULTS.keys(),
+        }
+        advanced_root_keys = set(ADVANCED_DEFAULTS)
+        if self._repair_misplaced_root_keys(self.main, main_root_keys):
+            self.main.save()
+        self.advanced = ConfigDocument(CONFIG_DIR / ADVANCED_FILE)
+        if self._repair_misplaced_root_keys(self.advanced, advanced_root_keys):
+            self.advanced.save()
         self.macros = ConfigDocument(CONFIG_DIR / MACRO_FILE)
         self.apps = ConfigDocument(CONFIG_DIR / APPS_FILE)
-        self.advanced = ConfigDocument(CONFIG_DIR / ADVANCED_FILE)
+
+    @staticmethod
+    def _repair_misplaced_root_keys(document: ConfigDocument, keys: set[str]) -> bool:
+        changed = False
+        for key in keys:
+            root_value = document.get("", key, None)
+            misplaced_value = document.misplaced_value(key)
+            if document.remove_misplaced("", key):
+                changed = True
+                if root_value is None and misplaced_value is not None:
+                    document.set("", key, misplaced_value)
+        return changed
 
     def save(self, *documents: ConfigDocument) -> tuple[bool, str]:
         for document in documents:
@@ -1395,7 +1448,11 @@ class SettingsWindow(Gtk.ApplicationWindow):
             document.set("Icons", f"{target}Name", name)
             document.set("Icons", f"{target}Path", str(path))
             if target == "Settings":
-                launcher, payload = desktop_entry(name)
+                # Use the concrete icon file in the desktop entry. GNOME Shell
+                # caches theme lookups by icon name, so changing Icon= to a new
+                # hicolor name can leave the app grid and dock showing old art
+                # until the shell refreshes its icon theme cache.
+                launcher, payload = desktop_entry(str(path))
                 rollback.append((launcher, launcher.read_bytes() if launcher.exists() else None))
                 atomic_write(launcher, payload)
             else:
