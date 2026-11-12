@@ -58,39 +58,23 @@ void IbusInputContext::setClient(const std::string &client) {
 bool IbusInputContext::processKeyEvent(guint keyval, guint keycode,
                                        guint state) {
   const bool release = state & IBUS_RELEASE_MASK;
-  // IBus marks key events returned after ibus_engine_forward_key_event().
-  // Keep this before stripping the IBus-only bits from KeyStates so Areca
-  // won't synchronize Bamboo a second time for GTK clients.
-  const bool forwarded = state & IBUS_FORWARD_MASK;
   auto states = im::KeyStates::fromInteger(
       state & ~static_cast<guint>(IBUS_RELEASE_MASK | IBUS_FORWARD_MASK |
                                   IBUS_IGNORED_MASK | IBUS_HANDLED_MASK));
-  const auto nowMs = static_cast<gint>(
-      (static_cast<guint64>(g_get_monotonic_time() / 1000)) & 0x7fffffffU);
-  gint eventTime = nowMs;
   if (release) {
     if (heldKeyval_ == keyval) {
-      eventTime = heldKeyTime_;
       heldKeyval_ = 0;
-      heldKeyTime_ = 0;
     }
   } else {
     if (heldKeyval_ == keyval) {
       states.set(im::KeyState::Repeat);
-      // GTK replay thường quay lại ngay trong cùng một key cycle. IBus không
-      // cung cấp timestamp gốc như Fcitx; giữ timestamp của keydown ban đầu
-      // cho press lặp đến trong 50 ms để core nhận diện cùng một replay.
-      if (nowMs >= heldKeyTime_ && nowMs - heldKeyTime_ <= 50) {
-        eventTime = heldKeyTime_;
-      }
     }
     heldKeyval_ = keyval;
-    heldKeyTime_ = eventTime;
   }
   // Keycode của Areca theo X11, bằng keycode evdev cộng 8.
   const im::Key key(static_cast<im::KeySym>(keyval), states,
                     static_cast<int>(keycode) + 8);
-  im::KeyEvent event(this, key, release, eventTime, forwarded);
+  im::KeyEvent event(this, key, release);
   IbusHost::instance().engine().keyEvent(event);
   return event.filtered();
 }

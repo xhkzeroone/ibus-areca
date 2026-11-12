@@ -70,7 +70,7 @@ void run(bool earlyAck, uint32_t waitMs, uint32_t count) {
                                              22),
                               release, 1234);
     assert(backend.handleBackspace(event));
-    return event.filtered() && event.accepted();
+    assert(!event.filtered() && !event.accepted());
   };
   assert(backend.apply(
              context, plan, [&](uint64_t id, areca::RewriteOutcome result) {
@@ -87,13 +87,13 @@ void run(bool earlyAck, uint32_t waitMs, uint32_t count) {
                                  [&](areca::im::EventSourceTime *, uint64_t) {
                                    assert(device.keys.size() == 2);
                                    ackTime = areca::im::now(CLOCK_MONOTONIC);
-                                   assert(!deliver(false, false));
-                                   assert(!deliver(false, true));
-                                   assert(!deliver(true, false));
-                                   assert(!deliver(true, false));
-                                   // GTK replay vượt quá số Backspace phát ra
-                                   // phải bị chặn, không tạo lần xóa thứ ba.
-                                   assert(deliver(false, true));
+                                   deliver(false, false);
+                                   deliver(false, true);
+                                   deliver(true, false);
+                                   deliver(true, false);
+                                   // Event sau ngưỡng vẫn forward và không mở
+                                   // thêm lần commit.
+                                   deliver(false, true);
                                    return false;
                                  });
     ackTimer->setOneShot();
@@ -121,71 +121,11 @@ void run(bool earlyAck, uint32_t waitMs, uint32_t count) {
     }
   }
 }
-
-void duplicateReplayDoesNotReachClient() {
-  areca::im::EventLoop loop;
-  areca::im::InputContextManager manager;
-  Context context(manager);
-  FakeDevice device;
-  areca::AdaptiveWait adaptive;
-  areca::UinputBackspaceBackend backend(loop, device, adaptive,
-                                        [] { return false; });
-  areca::RewritePlan plan;
-  plan.transactionId = 2;
-  plan.backspaceCount = 1;
-  plan.uinputBackspaceAckTimeoutMs = 40;
-  plan.afterBackspaceWaitMs = 1;
-  int completed = 0;
-  assert(backend.apply(
-             context, plan, [&](uint64_t id, areca::RewriteOutcome result) {
-               assert(id == 2 && result == areca::RewriteOutcome::Succeeded);
-               ++completed;
-               loop.exit();
-             }) == areca::ApplyStatus::Pending);
-
-  bool originalForwarded = false;
-  bool replayConsumed = false;
-  auto ackTimer = loop.addTimeEvent(
-      CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + 1000, 1,
-      [&](areca::im::EventSourceTime *, uint64_t) {
-        auto press = [&](bool repeat) {
-          areca::im::KeyEvent event(
-              &context,
-              areca::im::Key(areca::im::Key_BackSpace,
-                             repeat ? areca::im::KeyState::Repeat
-                                    : areca::im::KeyState::NoState,
-                             22),
-              false, 2000);
-          assert(backend.handleBackspace(event));
-          return event.filtered() && event.accepted();
-        };
-        originalForwarded = !press(false);
-        replayConsumed = press(true);
-        for (const bool release : {true, true}) {
-          areca::im::KeyEvent event(
-              &context, areca::im::Key(areca::im::Key_BackSpace, {}, 22),
-              release, 2000);
-          assert(backend.handleBackspace(event));
-        }
-        return false;
-      });
-  ackTimer->setOneShot();
-  auto watchdog = loop.addTimeEvent(
-      CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + 2000000, 1,
-      [](areca::im::EventSourceTime *, uint64_t) {
-        assert(false);
-        return false;
-      });
-  loop.exec();
-  assert(completed == 1 && originalForwarded && replayConsumed);
-  assert(device.keys.size() == 2);
-}
 } // namespace
 int main() {
   run(true, 60, 2); // Delay đủ rộng: tiếp tục gửi trong lúc đang chờ commit.
   run(true, 1, 2);  // Delay quá ngắn: không commit trước khi phát hết phím.
   run(false, 1, 2); // Thiếu ACK: timeout vẫn hoàn tất một lần.
   run(false, 1, 0); // Không cần xóa: commit trực tiếp sau delay.
-  duplicateReplayDoesNotReachClient();
   std::cout << "Uinput Backspace timer tests passed\n";
 }

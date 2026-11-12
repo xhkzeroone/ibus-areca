@@ -278,16 +278,15 @@ private:
 class KeyEvent {
 public:
   KeyEvent(InputContext *inputContext, Key rawKey, bool isRelease = false,
-           int time = 0, bool forwarded = false)
+           int time = 0)
       : inputContext_(inputContext), rawKey_(rawKey), key_(rawKey.normalize()),
-        isRelease_(isRelease), time_(time), forwarded_(forwarded) {}
+        isRelease_(isRelease), time_(time) {}
 
   InputContext *inputContext() const { return inputContext_; }
   const Key &key() const { return key_; }
   const Key &rawKey() const { return rawKey_; }
   bool isRelease() const { return isRelease_; }
   int time() const { return time_; }
-  bool isForwarded() const { return forwarded_; }
 
   void filter() { filtered_ = true; }
   void accept() { accepted_ = true; }
@@ -306,7 +305,6 @@ private:
   Key key_;
   bool isRelease_;
   int time_;
-  bool forwarded_ = false;
   bool filtered_ = false;
   bool accepted_ = false;
 };

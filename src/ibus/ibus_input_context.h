@@ -43,7 +43,6 @@ private:
   IBusEngine *engine_;
   // IBus không đánh dấu phím lặp; press đến khi phím đó chưa nhả là lặp.
   guint heldKeyval_ = 0;
-  gint heldKeyTime_ = 0;
   bool showingInformation_ = false;
   std::unique_ptr<im::EventSourceTime> informationTimer_;
 };
