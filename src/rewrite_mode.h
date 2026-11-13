@@ -3,13 +3,13 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "im/im.h"
 
+#include "backspace_replay_guard.h"
 #include "bamboo_engine_adapter.h"
 #include "input_scheduler.h"
 #include "mode_handler.h"
@@ -38,7 +38,7 @@ struct RewriteInputState final : public im::InputContextProperty {
   std::unique_ptr<VietnameseEngine> engine;
   SentenceCapitalizationState sentenceCapitalization;
   bool backspaceRecoveryAwaitingRelease = false;
-  std::set<std::pair<int, uint32_t>> forwardedBackspacePresses;
+  BackspaceReplayGuard backspaceReplay;
   // Frontend hoặc lifecycle reset đã thay đổi text/vị trí quanh con trỏ. Cờ
   // one-shot này cho phép phím text kế tiếp thử nạp lại trạng thái đúng một
   // lần.

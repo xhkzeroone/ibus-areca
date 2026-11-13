@@ -157,7 +157,7 @@ void testRewriteSeesReplayAndHeldBackspace() {
   deliver(false, false, 1533);
   assert(state->engine->currentText() == "đ");
   deliver(true, false, 1550);
-  assert(state->forwardedBackspacePresses.empty());
+  assert(!state->backspaceReplay.holding());
 }
 
 // Lặp phím nhanh (mỗi 10 ms): mọi nhịp lặp đều là phím thật, không được coi là

@@ -242,7 +242,8 @@ void RewriteModeHandler::forwardSyncedBackspace(im::KeyEvent &event,
     state.resetProtectedUntilUsec = im::now(CLOCK_MONOTONIC) + 20 * 1000;
   }
   // Kết thúc: Giữ snapshot Bamboo qua reset/deactivate của Edge X11
-  state.forwardedBackspacePresses.emplace(event.time(), event.rawKey().code());
+  state.backspaceReplay.forwarded(event.time(), event.rawKey().code(),
+                                  im::now(CLOCK_MONOTONIC));
   event.forward();
 }
 
@@ -323,7 +324,7 @@ void RewriteModeHandler::handleKeyEvent(im::KeyEvent &event) {
   }
   if (event.isRelease()) {
     if (isBackspace && state)
-      state->forwardedBackspacePresses.clear();
+      state->backspaceReplay.clear();
     if (isBackspace && state && state->engine &&
         state->backspaceRecoveryAwaitingRelease) {
       if (isRepeat) {
@@ -402,10 +403,9 @@ void RewriteModeHandler::handleKeyEvent(im::KeyEvent &event) {
       return;
     }
     state->sentenceCapitalization.reset();
-    if (!state->forwardedBackspacePresses.empty()) {
-      const bool replay =
-          event.time() != 0 && state->forwardedBackspacePresses.contains(
-                                   {event.time(), event.rawKey().code()});
+    if (state->backspaceReplay.holding()) {
+      const bool replay = state->backspaceReplay.takeReplay(
+          event.time(), event.rawKey().code(), im::now(CLOCK_MONOTONIC));
       if (replay) {
         if (debugProvider_()) {
           ARECA_INFO() << "areca: backspace route=forward reason=replayed-press"
@@ -432,8 +432,8 @@ void RewriteModeHandler::handleKeyEvent(im::KeyEvent &event) {
                        << " program=" << inputContext->program();
         }
         resetContext(*inputContext);
-        state->forwardedBackspacePresses.emplace(event.time(),
-                                                 event.rawKey().code());
+        state->backspaceReplay.forwarded(event.time(), event.rawKey().code(),
+                                         im::now(CLOCK_MONOTONIC));
         event.forward();
         return;
       }
@@ -544,7 +544,7 @@ void RewriteModeHandler::resetContext(im::InputContext &inputContext) {
   scheduler_.resetContext(inputContext);
   if (auto *state = stateFor(inputContext)) {
     state->backspaceRecoveryAwaitingRelease = false;
-    state->forwardedBackspacePresses.clear();
+    state->backspaceReplay.clear();
     state->resetProtectedUntilUsec = 0;
     state->sentenceCapitalization.reset();
     // Sau reset, composition cũ đã mất. Arm lại để phím text kế tiếp có thể tái
