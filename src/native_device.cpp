@@ -610,11 +610,9 @@ bool NativeDevice::isSupported() const {
 
 NativeDevice::~NativeDevice() = default;
 
-// Libei chỉ có trên phiên Wayland; trên X11 backend Native không dùng được.
-bool NativeDevice::warmUp() {
-  return impl_->wayland && impl_->startPortalWorker();
-}
-
+// Phiên libei chỉ mở ở lần đầu routing thật sự cần gửi phím qua Native; nhờ
+// restore token, hộp thoại xin quyền chỉ hiện ở lần mở đầu tiên. Libei chỉ có
+// trên phiên Wayland; trên X11 backend Native không dùng được.
 bool NativeDevice::isAvailable() {
   if (!impl_->wayland) {
     return false;

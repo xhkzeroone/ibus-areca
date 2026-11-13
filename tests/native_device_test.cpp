@@ -72,23 +72,21 @@ void testUnsupportedPortals() {
     portal.reply(reply);
     assert(!device->isSupported());
     // Máy không hỗ trợ thì không mở phiên xin quyền.
-    assert(!device->warmUp());
     assert(!device->isAvailable());
   }
 }
 
-// Warmup lúc đang dò không mở phiên; portal báo không hỗ trợ thì thôi hẳn.
-void testWarmUpWaitsForProbe() {
+// Cần gửi phím lúc đang dò thì chưa mở phiên; portal báo không hỗ trợ thì
+// thôi hẳn.
+void testSessionWaitsForProbe() {
   useWayland(true);
   areca::im::EventLoop loop;
   FakePortal portal;
   auto device = makeDevice(loop, portal);
   device->probeSupport();
-  assert(device->warmUp());
   assert(!device->isAvailable());
   portal.reply(std::nullopt);
   assert(!device->isSupported());
-  assert(!device->warmUp());
   assert(!device->isAvailable());
 }
 
@@ -100,7 +98,7 @@ void testX11NeverProbes() {
   device->probeSupport();
   assert(portal.calls == 0);
   assert(!device->isSupported());
-  assert(!device->warmUp());
+  assert(!device->isAvailable());
 }
 
 void testLateReplyAfterDestroy() {
@@ -119,7 +117,7 @@ void testLateReplyAfterDestroy() {
 int main() {
   testSupportedPortal();
   testUnsupportedPortals();
-  testWarmUpWaitsForProbe();
+  testSessionWaitsForProbe();
   testX11NeverProbes();
   testLateReplyAfterDestroy();
   std::cout << "native_device_test passed\n";

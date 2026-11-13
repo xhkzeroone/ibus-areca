@@ -246,26 +246,33 @@ std::string ArecaEngine::describeSurroundingBackend() {
   return "V1";
 }
 
+// Mô tả đi theo đúng thứ tự của bộ chọn nhưng hỏi Native bằng isSupported():
+// isAvailable() của Native mở phiên libei, chỉ routing thật mới được gọi.
 std::string ArecaEngine::describeShiftSelectBackend() {
-  if (auto *shiftBackend = resolvePreferredShiftSelectBackend()) {
-    if (std::string_view(shiftBackend->name()).starts_with("native")) {
-      return "Native";
-    }
-    if (std::string_view(shiftBackend->name()).starts_with("uinput")) {
-      return "Uinput";
-    }
+  const bool native = nativeDevice_.isSupported();
+  if (advancedConfig_.useNativeInsteadOfUinput.value() && native) {
+    return "Native";
+  }
+  if (uinputShiftSelectBackend_.isAvailable()) {
+    return "Uinput";
+  }
+  if (native) {
+    return "Native";
   }
   return advancedConfig_.useNativeInsteadOfUinput.value() ? "Native" : "Uinput";
 }
 
 std::string ArecaEngine::describeBackspaceBackend(bool preferHardware) {
-  if (auto *bsBackend = resolvePreferredBackspaceBackend(preferHardware)) {
-    const std::string_view name = bsBackend->name();
-    if (name.starts_with("native")) {
+  if (preferHardware || advancedConfig_.useUinputInsteadOfForwardKey.value()) {
+    const bool native = nativeDevice_.isSupported();
+    if (advancedConfig_.useNativeInsteadOfUinput.value() && native) {
       return "Native";
     }
-    if (name.starts_with("uinput")) {
+    if (uinputBackspaceBackend_.isAvailable()) {
       return "Uinput";
+    }
+    if (native) {
+      return "Native";
     }
   }
   return "ForwardKey";

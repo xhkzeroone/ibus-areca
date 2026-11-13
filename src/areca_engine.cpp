@@ -261,34 +261,20 @@ void ArecaEngine::notifyUinputUnavailable() {
 
 void ArecaEngine::scheduleDeviceWarmup() {
   deviceWarmupTimer_.reset();
-  bool warmUpNative = advancedConfig_.useNativeInsteadOfUinput.value();
-  if (!warmUpNative) {
-    for (const auto &pair : appBackendOverridesMap_) {
-      if ((pair.second == AppBackendMode::ShiftSelect ||
-           pair.second == AppBackendMode::Backspace) &&
-          advancedConfig_.useNativeInsteadOfUinput.value()) {
-        warmUpNative = true;
-        break;
-      }
-    }
-  }
   const uint64_t deadline = im::now(CLOCK_MONOTONIC);
   deviceWarmupTimer_ = host_.eventLoop().addTimeEvent(
-      CLOCK_MONOTONIC, deadline, 0,
-      [this, warmUpNative](im::EventSourceTime *, uint64_t) {
+      CLOCK_MONOTONIC, deadline, 0, [this](im::EventSourceTime *, uint64_t) {
         auto timer = std::move(deviceWarmupTimer_);
         // Warmup chỉ chuẩn bị thiết bị. Chỉ báo lỗi khi routing thực sự thử
         // chọn uinput cho một thao tác gõ/xoá.
         const bool uinputAvailable = uinputDevice_.warmUp();
         // Chỉ đọc thuộc tính portal, không xin quyền, để máy không có libei
-        // không mở phiên xin quyền.
+        // không mở phiên xin quyền. Phiên libei chỉ mở khi lần đầu cần gửi
+        // phím qua Native.
         nativeDevice_.probeSupport();
-        const bool nativeStarted = warmUpNative && nativeDevice_.warmUp();
         if (debugEnabled()) {
           ARECA_INFO() << "areca: device warmup completed"
-                       << " uinput-available=" << uinputAvailable
-                       << " native-requested=" << warmUpNative
-                       << " native-started=" << nativeStarted;
+                       << " uinput-available=" << uinputAvailable;
         }
         return false;
       });
