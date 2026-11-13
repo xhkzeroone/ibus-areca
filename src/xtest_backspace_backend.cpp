@@ -7,7 +7,7 @@
 namespace areca {
 
 XTestBackspaceBackend::XTestBackspaceBackend(im::EventLoop &eventLoop,
-                                             XTestBackspaceDevice &device,
+                                             NativeKeyDevice &device,
                                              AdaptiveWait &adaptiveWait,
                                              DebugProvider debugProvider)
     : eventLoop_(eventLoop), device_(device), commitPost_(eventLoop),

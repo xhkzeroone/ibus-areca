@@ -29,7 +29,7 @@ body:
         - Tên ứng dụng: Chrome / Firefox / LibreOffice / Discord / Telegram / VS Code...
         - Định dạng cài đặt: Native deb, rpm, arch / Flatpak / Snap / AppImage
         - Kiểu gõ: Telex / VNI / Simple Telex
-        - Backend chế độ gõ: Auto / Surrounding Text / Shift+Left uinput / Native Libei hoặc XTest
+        - Backend chế độ gõ: Auto / Surrounding Text / Shift+Left uinput / Native Libei
     validations:
       required: true
   - type: textarea

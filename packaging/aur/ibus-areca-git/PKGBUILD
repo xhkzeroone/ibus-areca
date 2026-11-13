@@ -19,8 +19,6 @@ depends=(
   'libportal'
   'systemd-libs'
   'dbus'
-  'libx11'
-  'libxtst'
 )
 makedepends=(
   'cmake'

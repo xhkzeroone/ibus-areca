@@ -47,7 +47,7 @@ trình duyệt, Electron, terminal và ứng dụng XWayland.
 
 **Tự chọn backend sửa chữ theo ứng dụng**
 - Surrounding text khi ứng dụng hỗ trợ xoá qua giao thức input method.
-- Backspace hoặc Shift+Left phát qua uinput, Libei/XTest hoặc ForwardKey khi
+- Backspace hoặc Shift+Left phát qua uinput, Libei hoặc ForwardKey khi
   ứng dụng không hỗ trợ surrounding text.
 - Xử lý riêng ô URL, thanh địa chỉ và gợi ý tự hoàn thành của trình duyệt.
 - Tự nhận ra ứng dụng đang focus qua IBus và AT-SPI. Có thể ghi đè chế độ và
@@ -315,7 +315,7 @@ Các nhóm cấu hình chính:
 | Chung | Kiểu gõ, bảng mã, kiểm tra chính tả, kiểu đặt dấu, tự viết hoa, phím chọn chế độ cho ứng dụng |
 | Macro | Bật tắt macro, bảng từ viết tắt, hoàn tác bằng Backspace, phím bỏ qua macro |
 | Theo ứng dụng | Ghi đè chế độ và backend cho từng ứng dụng |
-| Nâng cao | Thời gian chờ của từng backend, chọn uinput hay Libei/XTest, log debug |
+| Nâng cao | Thời gian chờ của từng backend, chọn uinput hay Libei, log debug |
 
 Cấu hình được lưu ở `~/.config/ibus-areca/conf/areca*.conf`. Engine tự nạp lại
 khi các file này thay đổi, không cần khởi động lại IBus.
@@ -407,8 +407,8 @@ terminal đó thay vì vào journal.
 ## Build từ mã nguồn
 
 Cần bộ biên dịch C++20, CMake, Ninja, Go và gói phát triển của IBus, GLib,
-xkbcommon, libinput, libudev, DBus, X11, Xtst. libei và libportal là tuỳ chọn,
-dùng cho backend Native trên Wayland; thiếu thì Areca dùng XTest. Ứng dụng cài
+xkbcommon, libinput, libudev, DBus, libei và libportal. Backend Native dùng
+libei nên chỉ chạy trên Wayland. Ứng dụng cài
 đặt cần Python 3, PyGObject và GTK 4.
 
 ```bash
@@ -502,7 +502,7 @@ Xin cảm ơn những người đã đóng góp trực tiếp cho Areca:
       Tác giả và người phát triển chính.
       <ul>
         <li>Kiến trúc bộ gõ, hàng đợi phím và chế độ Rewrite, Preedit</li>
-        <li>Các backend sửa chữ: surrounding text, uinput, Shift+Left, Libei/XTest, ForwardKey</li>
+        <li>Các backend sửa chữ: surrounding text, uinput, Shift+Left, Libei, ForwardKey</li>
         <li>Nhận diện ứng dụng qua AT-SPI, xử lý trình duyệt và thanh địa chỉ</li>
         <li>Sửa từ đã commit, thời gian chờ thích nghi</li>
         <li>Ứng dụng cài đặt GTK, installer, gói phân phối và website</li>

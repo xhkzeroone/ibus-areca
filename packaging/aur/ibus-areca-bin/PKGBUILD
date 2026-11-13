@@ -21,8 +21,6 @@ depends=(
   'libportal'
   'systemd-libs'
   'dbus'
-  'libx11'
-  'libxtst'
 )
 # Gói Arch do GitHub Actions dựng cho tag v$pkgver. Cập nhật checksum bằng
 # updpkgsums sau mỗi release.

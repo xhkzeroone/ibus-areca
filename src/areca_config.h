@@ -204,7 +204,7 @@ ARECA_CONFIGURATION(
         N_("Dùng uinput thay cho ForwardKey"), true};
     im::Option<bool> useXTestInsteadOfUinput{
         this, "UseXTestInsteadOfUinput",
-        N_("Dùng Native (Libei/XTest) thay thế uinput"), false};
+        N_("Dùng Native (Libei) thay thế uinput"), false};
     im::Option<bool> enableMouseTracking{
         this, "EnableMouseTracking", N_("Tự reset bộ gõ sau khi click chuột"),
         true};

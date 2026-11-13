@@ -9,9 +9,9 @@
 
 #include "adaptive_wait.h"
 #include "event_loop_post.h"
+#include "native_key_device.h"
 #include "rewrite_backend.h"
 #include "types.h"
-#include "xtest_device.h"
 
 namespace areca {
 
@@ -19,8 +19,7 @@ class XTestShiftSelectBackend final : public RewriteBackend {
 public:
   using DebugProvider = std::function<bool()>;
 
-  XTestShiftSelectBackend(im::EventLoop &eventLoop,
-                          XTestBackspaceDevice &device,
+  XTestShiftSelectBackend(im::EventLoop &eventLoop, NativeKeyDevice &device,
                           AdaptiveWait &adaptiveWait,
                           DebugProvider debugProvider);
   ~XTestShiftSelectBackend() override;
@@ -49,7 +48,7 @@ private:
   void clearPending();
 
   im::EventLoop &eventLoop_;
-  XTestBackspaceDevice &device_;
+  NativeKeyDevice &device_;
   EventLoopPostTask commitPost_;
   AdaptiveWait &adaptiveWait_;
   DebugProvider debugProvider_;

@@ -83,17 +83,14 @@ install_deps_debian() {
   sudo apt-get update
   sudo apt-get install -y build-essential cmake ninja-build pkg-config \
     golang-go ibus libibus-1.0-dev libglib2.0-dev libxkbcommon-dev \
-    libinput-dev libudev-dev libdbus-1-dev libx11-dev libxtst-dev \
+    libinput-dev libudev-dev libdbus-1-dev libei-dev libportal-dev \
     python3-gi gir1.2-gtk-4.0 gir1.2-gdkpixbuf-2.0
-  # Backend Native trên Wayland cần libei và libportal; thiếu thì dùng XTest.
-  sudo apt-get install -y libei-dev libportal-dev || \
-    echo "[ibus-areca] libei/libportal unavailable; Native backend will use XTest"
 }
 
 install_deps_arch() {
   local packages=(base-devel cmake ninja pkgconf go ibus glib2 libxkbcommon
                   gtk4 python python-gobject gdk-pixbuf2
-                  libinput systemd-libs dbus libx11 libxtst libei libportal)
+                  libinput systemd-libs dbus libei libportal)
   if [[ "$ARECA_UPDATE_SYSTEM" == 1 ]]; then
     echo "[ibus-areca] Updating Arch system and installing build dependencies"
     sudo pacman -Syu --needed --noconfirm "${packages[@]}"
@@ -119,9 +116,7 @@ install_deps_fedora() {
     gcc-c++ cmake ninja-build pkgconf-pkg-config go \
     ibus ibus-devel glib2-devel libxkbcommon-devel \
     python3-gobject gtk4 gdk-pixbuf2 \
-    libinput-devel systemd-devel dbus-devel libX11-devel libXtst-devel
-  sudo dnf install -y libei-devel libportal-devel || \
-    echo "[ibus-areca] libei/libportal unavailable; Native backend will use XTest"
+    libinput-devel systemd-devel dbus-devel libei-devel libportal-devel
 }
 
 install_deps_opensuse() {
@@ -130,7 +125,7 @@ install_deps_opensuse() {
     gcc-c++ cmake ninja pkg-config go ibus ibus-devel glib2-devel \
     libxkbcommon-devel python3-gobject python3-gobject-Gdk \
     typelib-1_0-Gtk-4_0 libgtk-4-1 typelib-1_0-GdkPixbuf-2_0 \
-    libinput-devel systemd-devel libX11-devel libXtst-devel dbus-1-devel \
+    libinput-devel systemd-devel libei-devel libportal-devel dbus-1-devel \
     libudev-devel
 }
 

@@ -38,12 +38,10 @@ add_dependencies(areca-bamboo areca-bamboo-bridge)
 pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
 pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
-pkg_check_modules(X11_CLIENT REQUIRED IMPORTED_TARGET x11)
-pkg_check_modules(XTEST REQUIRED IMPORTED_TARGET xtst)
 pkg_check_modules(LIBINPUT REQUIRED IMPORTED_TARGET libinput)
 pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
-pkg_check_modules(LIBEI QUIET IMPORTED_TARGET libei-1.0>=1.0)
-pkg_check_modules(LIBPORTAL QUIET IMPORTED_TARGET libportal>=0.7.1)
+pkg_check_modules(LIBEI REQUIRED IMPORTED_TARGET libei-1.0>=1.0)
+pkg_check_modules(LIBPORTAL REQUIRED IMPORTED_TARGET libportal>=0.7.1)
 find_package(Threads REQUIRED)
 
 add_executable(ibus-areca-mouse-monitor tools/mouse_monitor.cpp)
@@ -84,7 +82,6 @@ add_library(areca-core STATIC
     src/window_focus_tracker.cpp
     src/word_segment.cpp
     src/xtest_backspace_backend.cpp
-    src/xtest_device.cpp
     src/xtest_shift_select_backend.cpp
 )
 target_include_directories(areca-core PUBLIC src)
@@ -93,16 +90,10 @@ target_compile_definitions(areca-core PRIVATE
     ARECA_MOUSE_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/ibus-areca-mouse-monitor")
 target_link_libraries(areca-core PUBLIC
     areca-bamboo Threads::Threads PkgConfig::GLIB PkgConfig::GIO
-    PkgConfig::XKBCOMMON PkgConfig::DBUS PkgConfig::X11_CLIENT PkgConfig::XTEST
+    PkgConfig::XKBCOMMON PkgConfig::DBUS PkgConfig::LIBEI PkgConfig::LIBPORTAL
     dl m)
-if(LIBEI_FOUND AND LIBPORTAL_FOUND)
-    target_compile_definitions(areca-core PRIVATE ARECA_HAVE_LIBEI=1)
-    if(LIBPORTAL_VERSION VERSION_GREATER_EQUAL 0.8)
-        target_compile_definitions(areca-core PRIVATE ARECA_LIBPORTAL_PERSIST=1)
-    endif()
-    target_link_libraries(areca-core PUBLIC PkgConfig::LIBEI PkgConfig::LIBPORTAL)
-else()
-    message(WARNING "Native Wayland backend disabled; XTest fallback will be used")
+if(LIBPORTAL_VERSION VERSION_GREATER_EQUAL 0.8)
+    target_compile_definitions(areca-core PRIVATE ARECA_LIBPORTAL_PERSIST=1)
 endif()
 add_dependencies(areca-core ibus-areca-mouse-monitor)
 

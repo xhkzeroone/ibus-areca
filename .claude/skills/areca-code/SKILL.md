@@ -18,7 +18,7 @@ ibus-areca là engine IBus viết bằng C++20. Engine ghép dấu là Bamboo vi
 | Hàng đợi phím | `src/input_scheduler.*`, `key_queue.h` | FIFO single-flight: một phím xử lý xong mới tới phím sau, có post-commit barrier |
 | Bamboo | `src/bamboo_engine_adapter.*`, `bamboo-bridge/main.go` | `VietnameseEngine` trả `BambooResult` gồm `deleteCount` và `commitText` |
 | Rewrite backend | `src/rewrite_backend.h` và `*_backend.*` | Xoá chữ cũ rồi commit chữ mới theo `RewritePlan` |
-| Thiết bị phát phím | `uinput_device.*`, `xtest_device.*`, `native_device.*` | Interface có hàm virtual để test thay bằng fake |
+| Thiết bị phát phím | `uinput_device.*`, `native_device.*` | Interface có hàm virtual để test thay bằng fake |
 | Lag thích nghi | `adaptive_wait.h`, `adaptive_wait_monitor.*` | Tăng thời gian chờ khi timer bị trễ |
 | Nhận diện app | `window_focus_tracker.*`, `atspi/`, `input_type_detector.*`, `program_compatibility.*` | AT-SPI chạy thread riêng, phần còn lại là hàm thuần |
 | Surrounding text | `surrounding_text_*`, `surrounding_probe_match.h`, `surrounding_reliability.h` | Cache, probe, restore từ đã commit |
@@ -111,6 +111,6 @@ Callback bất đồng bộ giữ `inputContext.watch()` và kiểm tra `.get()`
 ## Test
 - Mỗi test là một file `tests/xxx_test.cpp` có `main()` dùng `assert`, build với `-Wall -Wextra -Wpedantic -UNDEBUG`, đăng ký trong `CMakeLists.txt` bằng `add_executable`, `target_include_directories` trỏ tới `src`, và `add_test`.
 - Logic thuần nên tách thành hàm hoặc header không phụ thuộc IBus để test trực tiếp, như `adaptive_wait.h`, `surrounding_text_restore.*`, `surrounding_probe_match.h`.
-- Backend test dùng `im::EventLoop` thật, `InputContext` giả override `commitStringImpl`, `deleteSurroundingTextImpl`, `forwardKeyImpl`, và thiết bị giả kế thừa `UinputDevice` hoặc `XTestBackspaceDevice`.
+- Backend test dùng `im::EventLoop` thật, `InputContext` giả override `commitStringImpl`, `deleteSurroundingTextImpl`, `forwardKeyImpl`, và thiết bị giả kế thừa `UinputDevice` hoặc `NativeKeyDevice`.
 - Cần đọc state riêng thì dùng `friend struct XxxTestAccess`, không mở public chỉ để test.
 - Test hành vi thời gian so sánh thứ tự và khoảng tối thiểu, không so bằng chính xác số micro giây.

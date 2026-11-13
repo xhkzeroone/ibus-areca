@@ -165,9 +165,8 @@ void ArecaEngine::applyConfig() {
   const PresentationMode previousDefaultMode = activePresentationMode_;
   const PresentationMode requestedMode = config_.presentationMode.value();
   rebuildAppBackendOverridesMap();
-  // Start the Native transport before the first rewrite whenever either
-  // legacy XTest policy key is enabled. Wayland requests Libei permission;
-  // XTest stays closed unless Libei fails. On X11, Native uses XTest directly.
+  // Xin quyền Libei trước lần sửa chữ đầu tiên khi bật backend Native. Trên
+  // X11 không có Libei nên Native không khả dụng.
   scheduleDeviceWarmup();
 
   // Tắt là hủy cả watcher, pipe, cờ click và process con; không chỉ bỏ qua

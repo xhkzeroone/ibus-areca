@@ -1,18 +1,18 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 
 #include "im/im.h"
 
-#include "xtest_device.h"
+#include "native_key_device.h"
 
 namespace areca {
 
-// Keyboard injection policy used by the Native rewrite backend:
-//   * Wayland: keyboard-only RemoteDesktop portal + libei.
-//   * X11, or a failed/unavailable libei session: XTest.
-class NativeDevice final : public XTestBackspaceDevice {
+// Bàn phím ảo của backend Native: RemoteDesktop portal (chỉ bàn phím) + libei
+// trên Wayland. Trên X11 hoặc khi phiên libei lỗi thì backend không khả dụng.
+class NativeDevice final : public NativeKeyDevice {
 public:
   using DebugProvider = std::function<bool()>;
 
@@ -29,6 +29,8 @@ public:
   bool warmUp();
 
 private:
+  bool sendKey(uint32_t code, bool press);
+
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

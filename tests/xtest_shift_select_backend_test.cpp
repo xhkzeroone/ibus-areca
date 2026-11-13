@@ -8,7 +8,7 @@
 #include "im/im.h"
 
 #include "adaptive_wait.h"
-#include "xtest_device.h"
+#include "native_key_device.h"
 #include "xtest_shift_select_backend.h"
 
 namespace {
@@ -34,7 +34,7 @@ private:
   std::vector<std::string> &events_;
 };
 
-class FakeXTestDevice final : public areca::XTestBackspaceDevice {
+class FakeXTestDevice final : public areca::NativeKeyDevice {
 public:
   explicit FakeXTestDevice(std::vector<std::string> &events)
       : events_(events) {}
