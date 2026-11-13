@@ -142,8 +142,8 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &) {
       static_cast<uint32_t>(advancedConfig_.surroundingDeleteDelayMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.afterSurroundingDeleteWaitMs.value()),
-      static_cast<uint32_t>(advancedConfig_.xtestBackspaceDelayMs.value()),
-      static_cast<uint32_t>(advancedConfig_.afterXTestBackspaceWaitMs.value()),
+      static_cast<uint32_t>(advancedConfig_.nativeBackspaceDelayMs.value()),
+      static_cast<uint32_t>(advancedConfig_.afterNativeBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.postCommitDelayMs.value()),
       advancedConfig_.preciseTiming.value() ? 1U : 0U};
 }

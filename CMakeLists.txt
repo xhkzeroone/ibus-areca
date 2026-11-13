@@ -81,8 +81,8 @@ add_library(areca-core STATIC
     src/uinput_shift_select_backend.cpp
     src/window_focus_tracker.cpp
     src/word_segment.cpp
-    src/xtest_backspace_backend.cpp
-    src/xtest_shift_select_backend.cpp
+    src/native_backspace_backend.cpp
+    src/native_shift_select_backend.cpp
 )
 target_include_directories(areca-core PUBLIC src)
 target_compile_options(areca-core PRIVATE -Wall -Wextra -Wpedantic)

@@ -8,8 +8,8 @@
 #include "im/im.h"
 
 #include "adaptive_wait.h"
+#include "native_backspace_backend.h"
 #include "native_key_device.h"
-#include "xtest_backspace_backend.h"
 
 namespace {
 
@@ -34,9 +34,9 @@ private:
   std::vector<std::string> &events_;
 };
 
-class FakeXTestDevice final : public areca::NativeKeyDevice {
+class FakeNativeDevice final : public areca::NativeKeyDevice {
 public:
-  explicit FakeXTestDevice(std::vector<std::string> &events)
+  explicit FakeNativeDevice(std::vector<std::string> &events)
       : events_(events) {}
 
   bool isAvailable() override { return available; }
@@ -64,8 +64,8 @@ areca::RewritePlan makePlan(uint64_t transactionId, uint32_t backspaceCount,
   areca::RewritePlan plan;
   plan.transactionId = transactionId;
   plan.backspaceCount = backspaceCount;
-  plan.xtestBackspaceDelayMs = 0;
-  plan.afterXTestBackspaceWaitMs = 0;
+  plan.nativeBackspaceDelayMs = 0;
+  plan.afterNativeBackspaceWaitMs = 0;
   plan.commitText = std::move(commitText);
   return plan;
 }
@@ -75,10 +75,10 @@ void testSuccessfulRewrite() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestBackspaceBackend backend(eventLoop, device, adaptiveWait,
-                                       [] { return false; });
+  areca::NativeBackspaceBackend backend(eventLoop, device, adaptiveWait,
+                                        [] { return false; });
 
   bool doneCalled = false;
   const auto status =
@@ -109,11 +109,11 @@ void testUnavailableDevice() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   device.available = false;
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestBackspaceBackend backend(eventLoop, device, adaptiveWait,
-                                       [] { return false; });
+  areca::NativeBackspaceBackend backend(eventLoop, device, adaptiveWait,
+                                        [] { return false; });
 
   bool doneCalled = false;
   const auto status = backend.apply(
@@ -132,11 +132,11 @@ void testInitialSendFailure() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   device.sendResults = {false};
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestBackspaceBackend backend(eventLoop, device, adaptiveWait,
-                                       [] { return false; });
+  areca::NativeBackspaceBackend backend(eventLoop, device, adaptiveWait,
+                                        [] { return false; });
 
   bool doneCalled = false;
   const auto status = backend.apply(
@@ -156,11 +156,11 @@ void testAsynchronousSendFailure() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   device.sendResults = {true, false};
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestBackspaceBackend backend(eventLoop, device, adaptiveWait,
-                                       [] { return false; });
+  areca::NativeBackspaceBackend backend(eventLoop, device, adaptiveWait,
+                                        [] { return false; });
 
   bool doneCalled = false;
   const auto status =
@@ -191,6 +191,6 @@ int main() {
   testUnavailableDevice();
   testInitialSendFailure();
   testAsynchronousSendFailure();
-  std::cout << "XTestBackspaceBackend test passed successfully\n";
+  std::cout << "NativeBackspaceBackend test passed successfully\n";
   return 0;
 }

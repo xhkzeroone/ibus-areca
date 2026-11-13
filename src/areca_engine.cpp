@@ -73,10 +73,10 @@ ArecaEngine::ArecaEngine(EngineHost &host)
       uinputShiftSelectBackend_(host_.eventLoop(), uinputDevice_, adaptiveWait_,
                                 [this]() { return debugEnabled(); }),
       nativeDevice_(host_.eventLoop(), [this]() { return debugEnabled(); }),
-      xtestBackspaceBackend_(host_.eventLoop(), nativeDevice_, adaptiveWait_,
-                             [this]() { return debugEnabled(); }),
-      xtestShiftSelectBackend_(host_.eventLoop(), nativeDevice_, adaptiveWait_,
-                               [this]() { return debugEnabled(); }),
+      nativeBackspaceBackend_(host_.eventLoop(), nativeDevice_, adaptiveWait_,
+                              [this]() { return debugEnabled(); }),
+      nativeShiftSelectBackend_(host_.eventLoop(), nativeDevice_, adaptiveWait_,
+                                [this]() { return debugEnabled(); }),
       backendSelectionPost_(host_.eventLoop()),
       scheduler_(
           host_.eventLoop(),
@@ -230,8 +230,8 @@ bool ArecaEngine::eraseFinalizedPreeditWord(
   plan.uinputBackspaceAckTimeoutMs =
       schedulerTiming.uinputBackspaceAckTimeoutMs;
   plan.afterBackspaceWaitMs = schedulerTiming.afterBackspaceWaitMs;
-  plan.xtestBackspaceDelayMs = schedulerTiming.xtestBackspaceDelayMs;
-  plan.afterXTestBackspaceWaitMs = schedulerTiming.afterXTestBackspaceWaitMs;
+  plan.nativeBackspaceDelayMs = schedulerTiming.nativeBackspaceDelayMs;
+  plan.afterNativeBackspaceWaitMs = schedulerTiming.afterNativeBackspaceWaitMs;
   plan.timerAccuracyUsec = schedulerTiming.timerAccuracyUsec;
 
   const auto status = backend->apply(
@@ -261,12 +261,12 @@ void ArecaEngine::notifyUinputUnavailable() {
 
 void ArecaEngine::scheduleDeviceWarmup() {
   deviceWarmupTimer_.reset();
-  bool warmUpNative = advancedConfig_.useXTestInsteadOfUinput.value();
+  bool warmUpNative = advancedConfig_.useNativeInsteadOfUinput.value();
   if (!warmUpNative) {
     for (const auto &pair : appBackendOverridesMap_) {
       if ((pair.second == AppBackendMode::ShiftSelect ||
            pair.second == AppBackendMode::Backspace) &&
-          advancedConfig_.useXTestInsteadOfUinput.value()) {
+          advancedConfig_.useNativeInsteadOfUinput.value()) {
         warmUpNative = true;
         break;
       }

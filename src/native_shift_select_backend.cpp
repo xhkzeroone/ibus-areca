@@ -1,4 +1,4 @@
-#include "xtest_shift_select_backend.h"
+#include "native_shift_select_backend.h"
 
 #include <utility>
 
@@ -6,18 +6,18 @@
 
 namespace areca {
 
-XTestShiftSelectBackend::XTestShiftSelectBackend(im::EventLoop &eventLoop,
-                                                 NativeKeyDevice &device,
-                                                 AdaptiveWait &adaptiveWait,
-                                                 DebugProvider debugProvider)
+NativeShiftSelectBackend::NativeShiftSelectBackend(im::EventLoop &eventLoop,
+                                                   NativeKeyDevice &device,
+                                                   AdaptiveWait &adaptiveWait,
+                                                   DebugProvider debugProvider)
     : eventLoop_(eventLoop), device_(device), commitPost_(eventLoop),
       adaptiveWait_(adaptiveWait), debugProvider_(std::move(debugProvider)) {}
 
-XTestShiftSelectBackend::~XTestShiftSelectBackend() { clearPending(); }
+NativeShiftSelectBackend::~NativeShiftSelectBackend() { clearPending(); }
 
-ApplyStatus XTestShiftSelectBackend::apply(im::InputContext &inputContext,
-                                           const RewritePlan &plan,
-                                           RewriteDone onDone) {
+ApplyStatus NativeShiftSelectBackend::apply(im::InputContext &inputContext,
+                                            const RewritePlan &plan,
+                                            RewriteDone onDone) {
   if (hasPending() || !plan.transactionId || !device_.isAvailable()) {
     return ApplyStatus::Failed;
   }
@@ -49,7 +49,7 @@ ApplyStatus XTestShiftSelectBackend::apply(im::InputContext &inputContext,
   return ApplyStatus::Pending;
 }
 
-bool XTestShiftSelectBackend::beginSelection(bool notifyFailure) {
+bool NativeShiftSelectBackend::beginSelection(bool notifyFailure) {
   shiftHeld_ = true;
   if (!device_.sendShift(true)) {
     shiftHeld_ = false;
@@ -59,7 +59,7 @@ bool XTestShiftSelectBackend::beginSelection(bool notifyFailure) {
   return sendNextSelectionLeft(notifyFailure);
 }
 
-bool XTestShiftSelectBackend::sendNextSelectionLeft(bool notifyFailure) {
+bool NativeShiftSelectBackend::sendNextSelectionLeft(bool notifyFailure) {
   auto *inputContext = inputContext_.get();
   if (!inputContext) {
     releaseShift();
@@ -86,12 +86,12 @@ bool XTestShiftSelectBackend::sendNextSelectionLeft(bool notifyFailure) {
   return true;
 }
 
-void XTestShiftSelectBackend::releaseShiftThenCommit() {
+void NativeShiftSelectBackend::releaseShiftThenCommit() {
   releaseShift();
   scheduleCommit();
 }
 
-void XTestShiftSelectBackend::releaseShift() {
+void NativeShiftSelectBackend::releaseShift() {
   if (!shiftHeld_) {
     return;
   }
@@ -99,14 +99,14 @@ void XTestShiftSelectBackend::releaseShift() {
   shiftHeld_ = false;
 }
 
-void XTestShiftSelectBackend::scheduleCommit() {
+void NativeShiftSelectBackend::scheduleCommit() {
   const uint32_t effectiveWait =
       adaptiveWait_.effectiveWaitMs(afterSelectWaitMs_);
   schedule(effectiveWait, TimerDispatch::PostEvent,
            [this]() { commitSelectionAndComplete(); });
 }
 
-void XTestShiftSelectBackend::commitSelectionAndComplete() {
+void NativeShiftSelectBackend::commitSelectionAndComplete() {
   auto *inputContext = inputContext_.get();
   if (!inputContext) {
     completeWithoutCommit();
@@ -157,7 +157,7 @@ void XTestShiftSelectBackend::commitSelectionAndComplete() {
            });
 }
 
-void XTestShiftSelectBackend::completeWithoutCommit() {
+void NativeShiftSelectBackend::completeWithoutCommit() {
   const uint64_t transactionId = transactionId_;
   auto onDone = std::move(onDone_);
   adaptiveWait_.cancelTransaction();
@@ -171,7 +171,7 @@ void XTestShiftSelectBackend::completeWithoutCommit() {
   }
 }
 
-void XTestShiftSelectBackend::failTransaction(bool notifyFailure) {
+void NativeShiftSelectBackend::failTransaction(bool notifyFailure) {
   if (debugProvider_()) {
     ARECA_INFO() << "areca: native-shift-select failed tx=" << transactionId_;
   }
@@ -184,7 +184,7 @@ void XTestShiftSelectBackend::failTransaction(bool notifyFailure) {
   }
 }
 
-void XTestShiftSelectBackend::finishTransaction() {
+void NativeShiftSelectBackend::finishTransaction() {
   const uint64_t transactionId = transactionId_;
   auto onDone = std::move(onDone_);
   adaptiveWait_.completeTransaction();
@@ -194,8 +194,9 @@ void XTestShiftSelectBackend::finishTransaction() {
   }
 }
 
-void XTestShiftSelectBackend::schedule(uint32_t delayMs, TimerDispatch dispatch,
-                                       std::function<void()> callback) {
+void NativeShiftSelectBackend::schedule(uint32_t delayMs,
+                                        TimerDispatch dispatch,
+                                        std::function<void()> callback) {
   timer_.reset();
   const uint64_t deadline =
       im::now(CLOCK_MONOTONIC) + static_cast<uint64_t>(delayMs) * 1000;
@@ -222,7 +223,7 @@ void XTestShiftSelectBackend::schedule(uint32_t delayMs, TimerDispatch dispatch,
   timer_->setOneShot();
 }
 
-void XTestShiftSelectBackend::clearPending() {
+void NativeShiftSelectBackend::clearPending() {
   timer_.reset();
   commitPost_.cancel();
   releaseShift();

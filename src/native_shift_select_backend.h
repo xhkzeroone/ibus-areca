@@ -11,39 +11,40 @@
 #include "event_loop_post.h"
 #include "native_key_device.h"
 #include "rewrite_backend.h"
+#include "types.h"
 
 namespace areca {
 
-class XTestBackspaceBackend final : public RewriteBackend {
+class NativeShiftSelectBackend final : public RewriteBackend {
 public:
   using DebugProvider = std::function<bool()>;
 
-  XTestBackspaceBackend(im::EventLoop &eventLoop, NativeKeyDevice &device,
-                        AdaptiveWait &adaptiveWait,
-                        DebugProvider debugProvider);
-  ~XTestBackspaceBackend() override;
+  NativeShiftSelectBackend(im::EventLoop &eventLoop, NativeKeyDevice &device,
+                           AdaptiveWait &adaptiveWait,
+                           DebugProvider debugProvider);
+  ~NativeShiftSelectBackend() override;
 
-  const char *name() const override { return "native-backspace"; }
+  const char *name() const override { return "native-shift-select"; }
   ApplyStatus apply(im::InputContext &inputContext, const RewritePlan &plan,
                     RewriteDone onDone) override;
 
-  bool isAvailable();
+  bool isAvailable() { return device_.isAvailable(); }
   bool hasPending() const { return transactionId_ != 0; }
 
 private:
   enum class TimerDispatch { TimerCallback, PostEvent };
 
-  bool sendNextBackspace(bool notifyFailure = true);
-  void failTransaction(bool notifyFailure);
-  void scheduleNextBackspace();
+  bool beginSelection(bool notifyFailure);
+  bool sendNextSelectionLeft(bool notifyFailure);
+  void releaseShiftThenCommit();
+  void releaseShift();
+  void commitSelectionAndComplete();
   void scheduleCommit();
-  void commitAfterAdaptiveWait(uint32_t appliedExtraWaitMs);
-  void commitAndComplete();
   void completeWithoutCommit();
+  void failTransaction(bool notifyFailure);
+  void finishTransaction();
   void schedule(uint32_t delayMs, TimerDispatch dispatch,
                 std::function<void()> callback);
-  void dispatchPostEvent(uint64_t deadlineUsec, std::function<void()> callback);
-  void observeAndRun(uint64_t deadlineUsec, std::function<void()> callback);
   void clearPending();
 
   im::EventLoop &eventLoop_;
@@ -56,11 +57,12 @@ private:
   im::TrackableObjectReference<im::InputContext> inputContext_;
   RewriteDone onDone_;
   uint64_t transactionId_ = 0;
-  uint32_t remainingBackspaces_ = 0;
-  uint32_t sentBackspaces_ = 0;
-  uint32_t backspaceDelayMs_ = 0;
-  uint32_t afterBackspaceWaitMs_ = 0;
+  uint32_t selectedCharacters_ = 0;
+  uint32_t remainingLefts_ = 0;
+  uint32_t shiftSelectDelayMs_ = 0;
+  uint32_t afterSelectWaitMs_ = 0;
   uint64_t timerAccuracyUsec_ = 1;
+  bool shiftHeld_ = false;
   std::string commitText_;
 };
 

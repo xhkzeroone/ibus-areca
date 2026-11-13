@@ -189,15 +189,15 @@ ArecaEngine::resolveSurroundingFallbackBackend(im::InputContext &inputContext) {
 }
 
 RewriteBackend *ArecaEngine::resolvePreferredShiftSelectBackend() {
-  if (advancedConfig_.useXTestInsteadOfUinput.value() &&
-      xtestShiftSelectBackend_.isAvailable()) {
-    return &xtestShiftSelectBackend_;
+  if (advancedConfig_.useNativeInsteadOfUinput.value() &&
+      nativeShiftSelectBackend_.isAvailable()) {
+    return &nativeShiftSelectBackend_;
   }
   if (uinputShiftSelectBackend_.isAvailable()) {
     return &uinputShiftSelectBackend_;
   }
-  if (xtestShiftSelectBackend_.isAvailable()) {
-    return &xtestShiftSelectBackend_;
+  if (nativeShiftSelectBackend_.isAvailable()) {
+    return &nativeShiftSelectBackend_;
   }
   return nullptr;
 }
@@ -205,15 +205,15 @@ RewriteBackend *ArecaEngine::resolvePreferredShiftSelectBackend() {
 RewriteBackend *
 ArecaEngine::resolvePreferredBackspaceBackend(bool preferHardware) {
   if (preferHardware || advancedConfig_.useUinputInsteadOfForwardKey.value()) {
-    if (advancedConfig_.useXTestInsteadOfUinput.value() &&
-        xtestBackspaceBackend_.isAvailable()) {
-      return &xtestBackspaceBackend_;
+    if (advancedConfig_.useNativeInsteadOfUinput.value() &&
+        nativeBackspaceBackend_.isAvailable()) {
+      return &nativeBackspaceBackend_;
     }
     if (uinputBackspaceBackend_.isAvailable()) {
       return &uinputBackspaceBackend_;
     }
-    if (xtestBackspaceBackend_.isAvailable()) {
-      return &xtestBackspaceBackend_;
+    if (nativeBackspaceBackend_.isAvailable()) {
+      return &nativeBackspaceBackend_;
     }
   }
   return &forwardBackspaceBackend_;
@@ -255,7 +255,7 @@ std::string ArecaEngine::describeShiftSelectBackend() {
       return "Uinput";
     }
   }
-  return advancedConfig_.useXTestInsteadOfUinput.value() ? "Native" : "Uinput";
+  return advancedConfig_.useNativeInsteadOfUinput.value() ? "Native" : "Uinput";
 }
 
 std::string ArecaEngine::describeBackspaceBackend(bool preferHardware) {

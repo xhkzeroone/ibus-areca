@@ -9,7 +9,7 @@
 
 #include "adaptive_wait.h"
 #include "native_key_device.h"
-#include "xtest_shift_select_backend.h"
+#include "native_shift_select_backend.h"
 
 namespace {
 
@@ -34,9 +34,9 @@ private:
   std::vector<std::string> &events_;
 };
 
-class FakeXTestDevice final : public areca::NativeKeyDevice {
+class FakeNativeDevice final : public areca::NativeKeyDevice {
 public:
-  explicit FakeXTestDevice(std::vector<std::string> &events)
+  explicit FakeNativeDevice(std::vector<std::string> &events)
       : events_(events) {}
 
   bool isAvailable() override { return available; }
@@ -93,10 +93,10 @@ void testSuccessfulShiftSelect() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestShiftSelectBackend backend(eventLoop, device, adaptiveWait,
-                                         [] { return false; });
+  areca::NativeShiftSelectBackend backend(eventLoop, device, adaptiveWait,
+                                          [] { return false; });
 
   assert(std::string(backend.name()) == "native-shift-select");
   assert(backend.isAvailable());
@@ -130,10 +130,10 @@ void testEmptyCommitTextErasesWithBackspace() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestShiftSelectBackend backend(eventLoop, device, adaptiveWait,
-                                         [] { return false; });
+  areca::NativeShiftSelectBackend backend(eventLoop, device, adaptiveWait,
+                                          [] { return false; });
 
   bool doneCalled = false;
   const auto status =
@@ -164,10 +164,10 @@ void testZeroBackspaceDirectCommit() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestShiftSelectBackend backend(eventLoop, device, adaptiveWait,
-                                         [] { return false; });
+  areca::NativeShiftSelectBackend backend(eventLoop, device, adaptiveWait,
+                                          [] { return false; });
 
   bool doneCalled = false;
   const auto status =
@@ -196,11 +196,11 @@ void testUnavailableDevice() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   device.available = false;
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestShiftSelectBackend backend(eventLoop, device, adaptiveWait,
-                                         [] { return false; });
+  areca::NativeShiftSelectBackend backend(eventLoop, device, adaptiveWait,
+                                          [] { return false; });
 
   assert(!backend.isAvailable());
 
@@ -221,11 +221,11 @@ void testInitialShiftFailure() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   device.shiftResults = {false};
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestShiftSelectBackend backend(eventLoop, device, adaptiveWait,
-                                         [] { return false; });
+  areca::NativeShiftSelectBackend backend(eventLoop, device, adaptiveWait,
+                                          [] { return false; });
 
   bool doneCalled = false;
   const auto status = backend.apply(
@@ -245,11 +245,11 @@ void testAsynchronousLeftFailure() {
   areca::im::InputContextManager manager;
   std::vector<std::string> events;
   DummyInputContext inputContext(manager, events);
-  FakeXTestDevice device(events);
+  FakeNativeDevice device(events);
   device.leftResults = {true, false};
   areca::AdaptiveWait adaptiveWait;
-  areca::XTestShiftSelectBackend backend(eventLoop, device, adaptiveWait,
-                                         [] { return false; });
+  areca::NativeShiftSelectBackend backend(eventLoop, device, adaptiveWait,
+                                          [] { return false; });
 
   bool doneCalled = false;
   const auto status =
@@ -283,6 +283,6 @@ int main() {
   testUnavailableDevice();
   testInitialShiftFailure();
   testAsynchronousLeftFailure();
-  std::cout << "XTestShiftSelectBackend test passed successfully\n";
+  std::cout << "NativeShiftSelectBackend test passed successfully\n";
   return 0;
 }

@@ -85,7 +85,6 @@ enum class AppBackendMode {
   Backspace = 3,
   UinputShiftSelect = 2,
   NativeShiftSelect = 2,
-  NativeXTest = 3,
   UinputBackspace = 3,
   ForwardKey = 3,
   Preedit = 4,
@@ -183,11 +182,12 @@ ARECA_CONFIGURATION(
         this, "AfterSurroundingDeleteWaitMs",
         N_("Chờ sau lệnh xóa surrounding v2 cuối (ms)"), 1,
         im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> xtestBackspaceDelayMs{
+    // Các key "XTest..." giữ tên cũ để file conf đã lưu vẫn đọc được.
+    im::Option<int, im::IntConstrain> nativeBackspaceDelayMs{
         this, "XTestBackspaceDelayMs",
         N_("Delay giữa các Backspace Native (ms)"), 1,
         im::IntConstrain(0, 1000)};
-    im::Option<int, im::IntConstrain> afterXTestBackspaceWaitMs{
+    im::Option<int, im::IntConstrain> afterNativeBackspaceWaitMs{
         this, "AfterXTestBackspaceWaitMs",
         N_("Chờ sau Backspace cuối Native (ms)"), 10,
         im::IntConstrain(0, 5000)};
@@ -202,7 +202,7 @@ ARECA_CONFIGURATION(
     im::Option<bool> useUinputInsteadOfForwardKey{
         this, "UseUinputInsteadOfForwardKey",
         N_("Dùng uinput thay cho ForwardKey"), true};
-    im::Option<bool> useXTestInsteadOfUinput{
+    im::Option<bool> useNativeInsteadOfUinput{
         this, "UseXTestInsteadOfUinput",
         N_("Dùng Native (Libei) thay thế uinput"), false};
     im::Option<bool> enableMouseTracking{

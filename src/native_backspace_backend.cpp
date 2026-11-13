@@ -1,4 +1,4 @@
-#include "xtest_backspace_backend.h"
+#include "native_backspace_backend.h"
 
 #include <utility>
 
@@ -6,20 +6,20 @@
 
 namespace areca {
 
-XTestBackspaceBackend::XTestBackspaceBackend(im::EventLoop &eventLoop,
-                                             NativeKeyDevice &device,
-                                             AdaptiveWait &adaptiveWait,
-                                             DebugProvider debugProvider)
+NativeBackspaceBackend::NativeBackspaceBackend(im::EventLoop &eventLoop,
+                                               NativeKeyDevice &device,
+                                               AdaptiveWait &adaptiveWait,
+                                               DebugProvider debugProvider)
     : eventLoop_(eventLoop), device_(device), commitPost_(eventLoop),
       adaptiveWait_(adaptiveWait), debugProvider_(std::move(debugProvider)) {}
 
-XTestBackspaceBackend::~XTestBackspaceBackend() { clearPending(); }
+NativeBackspaceBackend::~NativeBackspaceBackend() { clearPending(); }
 
-bool XTestBackspaceBackend::isAvailable() { return device_.isAvailable(); }
+bool NativeBackspaceBackend::isAvailable() { return device_.isAvailable(); }
 
-ApplyStatus XTestBackspaceBackend::apply(im::InputContext &inputContext,
-                                         const RewritePlan &plan,
-                                         RewriteDone onDone) {
+ApplyStatus NativeBackspaceBackend::apply(im::InputContext &inputContext,
+                                          const RewritePlan &plan,
+                                          RewriteDone onDone) {
   if (hasPending() || !plan.transactionId || !device_.isAvailable()) {
     return ApplyStatus::Failed;
   }
@@ -30,8 +30,8 @@ ApplyStatus XTestBackspaceBackend::apply(im::InputContext &inputContext,
   onDone_ = std::move(onDone);
   remainingBackspaces_ = plan.backspaceCount;
   sentBackspaces_ = 0;
-  backspaceDelayMs_ = plan.xtestBackspaceDelayMs;
-  afterBackspaceWaitMs_ = plan.afterXTestBackspaceWaitMs;
+  backspaceDelayMs_ = plan.nativeBackspaceDelayMs;
+  afterBackspaceWaitMs_ = plan.afterNativeBackspaceWaitMs;
   timerAccuracyUsec_ = plan.timerAccuracyUsec;
   commitText_ = plan.commitText;
 
@@ -53,7 +53,7 @@ ApplyStatus XTestBackspaceBackend::apply(im::InputContext &inputContext,
   return ApplyStatus::Pending;
 }
 
-bool XTestBackspaceBackend::sendNextBackspace(bool notifyFailure) {
+bool NativeBackspaceBackend::sendNextBackspace(bool notifyFailure) {
   auto *inputContext = inputContext_.get();
   if (!inputContext) {
     completeWithoutCommit();
@@ -81,7 +81,7 @@ bool XTestBackspaceBackend::sendNextBackspace(bool notifyFailure) {
   return true;
 }
 
-void XTestBackspaceBackend::failTransaction(bool notifyFailure) {
+void NativeBackspaceBackend::failTransaction(bool notifyFailure) {
   const uint64_t transactionId = transactionId_;
   auto onDone = std::move(onDone_);
   adaptiveWait_.cancelTransaction();
@@ -94,14 +94,14 @@ void XTestBackspaceBackend::failTransaction(bool notifyFailure) {
   }
 }
 
-void XTestBackspaceBackend::scheduleNextBackspace() {
+void NativeBackspaceBackend::scheduleNextBackspace() {
   const uint32_t delayMs =
       adaptiveWait_.effectiveBackspaceDelayMs(backspaceDelayMs_);
   schedule(delayMs, TimerDispatch::TimerCallback,
            [this]() { sendNextBackspace(); });
 }
 
-void XTestBackspaceBackend::scheduleCommit() {
+void NativeBackspaceBackend::scheduleCommit() {
   const uint32_t extraWaitMs =
       adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_);
   const uint32_t effectiveWaitMs =
@@ -116,7 +116,7 @@ void XTestBackspaceBackend::scheduleCommit() {
            [this, extraWaitMs]() { commitAfterAdaptiveWait(extraWaitMs); });
 }
 
-void XTestBackspaceBackend::commitAfterAdaptiveWait(
+void NativeBackspaceBackend::commitAfterAdaptiveWait(
     uint32_t appliedExtraWaitMs) {
   const uint32_t currentExtraWaitMs =
       adaptiveWait_.effectiveExtraWaitMs(afterBackspaceWaitMs_);
@@ -136,7 +136,7 @@ void XTestBackspaceBackend::commitAfterAdaptiveWait(
   commitAndComplete();
 }
 
-void XTestBackspaceBackend::commitAndComplete() {
+void NativeBackspaceBackend::commitAndComplete() {
   auto *inputContext = inputContext_.get();
   if (!inputContext) {
     completeWithoutCommit();
@@ -165,7 +165,7 @@ void XTestBackspaceBackend::commitAndComplete() {
   }
 }
 
-void XTestBackspaceBackend::completeWithoutCommit() {
+void NativeBackspaceBackend::completeWithoutCommit() {
   const uint64_t transactionId = transactionId_;
   auto onDone = std::move(onDone_);
   adaptiveWait_.cancelTransaction();
@@ -178,8 +178,8 @@ void XTestBackspaceBackend::completeWithoutCommit() {
   }
 }
 
-void XTestBackspaceBackend::schedule(uint32_t delayMs, TimerDispatch dispatch,
-                                     std::function<void()> callback) {
+void NativeBackspaceBackend::schedule(uint32_t delayMs, TimerDispatch dispatch,
+                                      std::function<void()> callback) {
   timer_.reset();
   const uint64_t deadline =
       im::now(CLOCK_MONOTONIC) + static_cast<uint64_t>(delayMs) * 1000;
@@ -206,15 +206,15 @@ void XTestBackspaceBackend::schedule(uint32_t delayMs, TimerDispatch dispatch,
   timer_->setOneShot();
 }
 
-void XTestBackspaceBackend::dispatchPostEvent(uint64_t deadlineUsec,
-                                              std::function<void()> callback) {
+void NativeBackspaceBackend::dispatchPostEvent(uint64_t deadlineUsec,
+                                               std::function<void()> callback) {
   commitPost_.schedule([this, deadlineUsec, callback]() mutable {
     observeAndRun(deadlineUsec, std::move(callback));
   });
 }
 
-void XTestBackspaceBackend::observeAndRun(uint64_t deadlineUsec,
-                                          std::function<void()> callback) {
+void NativeBackspaceBackend::observeAndRun(uint64_t deadlineUsec,
+                                           std::function<void()> callback) {
   const uint64_t firedAtUsec = im::now(CLOCK_MONOTONIC);
   const auto adjustment = adaptiveWait_.observeTimer(deadlineUsec, firedAtUsec);
   if (debugProvider_() && adjustment != AdaptiveWait::Adjustment::None) {
@@ -228,7 +228,7 @@ void XTestBackspaceBackend::observeAndRun(uint64_t deadlineUsec,
   callback();
 }
 
-void XTestBackspaceBackend::clearPending() {
+void NativeBackspaceBackend::clearPending() {
   timer_.reset();
   commitPost_.cancel();
   inputContext_.unwatch();
