@@ -56,6 +56,9 @@ build.
 
 ## Cập nhật phiên bản
 
+Tăng version, viết release note và tạo tag theo skill
+`.claude/skills/areca-release/SKILL.md`.
+
 Sau khi tạo tag GitHub mới và workflow đóng gói chạy xong:
 
 1. Trong `ibus-areca` và `ibus-areca-bin`, sửa `pkgver`, đặt lại `pkgrel=1`.

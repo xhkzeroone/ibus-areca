@@ -5,3 +5,6 @@ Trước khi tạo tag `vX.Y.Z`, viết `docs/release-notes/vX.Y.Z.md` (bắt đ
 release ghép danh sách PR do GitHub sinh, nội dung file này và đoạn hướng dẫn
 cài đặt (`.github/scripts/release-notes.sh`). Không có file thì release chỉ có
 danh sách PR và đoạn cài đặt.
+
+Quy trình đầy đủ khi tăng version, tạo tag và ra bản: xem skill
+`.claude/skills/areca-release/SKILL.md`.

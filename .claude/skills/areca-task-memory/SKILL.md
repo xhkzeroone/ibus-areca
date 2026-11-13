@@ -74,7 +74,7 @@ Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và 
 | AT-SPI | `src/window_focus_tracker.cpp`, `src/atspi/` |
 | App cài đặt GTK | `gtk-settings/areca_settings.py` |
 | Cài / gỡ | `scripts/install.sh`, `scripts/uninstall.sh` |
-| Version | `project(... VERSION ...)` trong `CMakeLists.txt` |
+| Version, tag, release note | Làm theo skill `areca-release` |
 
 ## 4. Quy tắc đọc
 

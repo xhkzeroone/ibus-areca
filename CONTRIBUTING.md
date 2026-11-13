@@ -56,7 +56,7 @@ Bot Claude tự review PR mở từ nhánh trong repo, dựa trên các quy tắ
 
 ### Phạm vi
 - Mỗi PR chỉ giải quyết một vấn đề. Không gộp refactor, đổi format hay sửa lỗi không liên quan vào cùng PR.
-- Không tự tăng version, không sửa `packaging/` hay file release trừ khi PR là về đóng gói.
+- Không tự tăng version, không sửa `packaging/` hay file release trừ khi PR là về đóng gói. Ra bản thì làm theo `.claude/skills/areca-release/SKILL.md`.
 - Không commit thư mục build, file IDE, log hay file tạm.
 - Không đổi submodule `bamboo/bamboo-core` nếu PR không cần đổi engine Bamboo.
 
