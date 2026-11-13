@@ -280,6 +280,9 @@ void ArecaEngine::scheduleDeviceWarmup() {
         // Warmup chỉ chuẩn bị thiết bị. Chỉ báo lỗi khi routing thực sự thử
         // chọn uinput cho một thao tác gõ/xoá.
         const bool uinputAvailable = uinputDevice_.warmUp();
+        // Chỉ đọc thuộc tính portal, không xin quyền, để máy không có libei
+        // không mở phiên xin quyền.
+        nativeDevice_.probeSupport();
         const bool nativeStarted = warmUpNative && nativeDevice_.warmUp();
         if (debugEnabled()) {
           ARECA_INFO() << "areca: device warmup completed"

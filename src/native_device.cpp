@@ -4,7 +4,9 @@
 #include <cerrno>
 #include <cstdlib>
 #include <filesystem>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
@@ -12,6 +14,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <gio/gio.h>
 #include <glib-unix.h>
 #include <libei.h>
 #include <libportal/portal.h>
@@ -24,6 +27,57 @@
 namespace areca {
 namespace {
 
+// Đọc thuộc tính RemoteDesktop qua D-Bus session, không mở phiên nào.
+void readPortalInfo(
+    std::function<void(std::optional<NativeDevice::PortalInfo>)> done) {
+  auto *callback =
+      new std::function<void(std::optional<NativeDevice::PortalInfo>)>(
+          std::move(done));
+  g_bus_get(
+      G_BUS_TYPE_SESSION, nullptr,
+      [](GObject *, GAsyncResult *result, gpointer data) {
+        auto *callback = static_cast<
+            std::function<void(std::optional<NativeDevice::PortalInfo>)> *>(
+            data);
+        GDBusConnection *bus = g_bus_get_finish(result, nullptr);
+        if (!bus) {
+          (*callback)(std::nullopt);
+          delete callback;
+          return;
+        }
+        // Portal có thể được D-Bus khởi động lần đầu nên chờ rộng tay.
+        g_dbus_connection_call(
+            bus, "org.freedesktop.portal.Desktop",
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.DBus.Properties", "GetAll",
+            g_variant_new("(s)", "org.freedesktop.portal.RemoteDesktop"),
+            G_VARIANT_TYPE("(a{sv})"), G_DBUS_CALL_FLAGS_NONE, 5000, nullptr,
+            [](GObject *source, GAsyncResult *result, gpointer data) {
+              auto *callback = static_cast<std::function<void(
+                  std::optional<NativeDevice::PortalInfo>)> *>(data);
+              GVariant *reply = g_dbus_connection_call_finish(
+                  G_DBUS_CONNECTION(source), result, nullptr);
+              if (!reply) {
+                (*callback)(std::nullopt);
+                delete callback;
+                return;
+              }
+              NativeDevice::PortalInfo info;
+              GVariant *properties = g_variant_get_child_value(reply, 0);
+              g_variant_lookup(properties, "version", "u", &info.version);
+              g_variant_lookup(properties, "AvailableDeviceTypes", "u",
+                               &info.availableDeviceTypes);
+              g_variant_unref(properties);
+              g_variant_unref(reply);
+              (*callback)(info);
+              delete callback;
+            },
+            callback);
+        g_object_unref(bus);
+      },
+      callback);
+}
+
 bool isWaylandSession() {
   const char *session = std::getenv("XDG_SESSION_TYPE");
   const char *waylandDisplay = std::getenv("WAYLAND_DISPLAY");
@@ -35,9 +89,11 @@ bool isWaylandSession() {
 
 struct NativeDevice::Impl {
   enum class State { Idle, Pending, Ready, Failed };
+  enum class Support { Unknown, Probing, Supported, Unsupported };
 
-  Impl(im::EventLoop &eventLoop, DebugProvider provider)
+  Impl(im::EventLoop &eventLoop, DebugProvider provider, PortalProbe probe)
       : eventLoop(eventLoop), debugProvider(std::move(provider)),
+        portalProbe(probe ? std::move(probe) : PortalProbe(readPortalInfo)),
         wayland(isWaylandSession()) {}
 
   ~Impl() {
@@ -47,8 +103,70 @@ struct NativeDevice::Impl {
 
   im::EventLoop &eventLoop;
   DebugProvider debugProvider;
+  PortalProbe portalProbe;
   const bool wayland;
   State state = State::Idle;
+  Support support = Support::Unknown;
+  // Có yêu cầu mở phiên trong lúc đang dò: mở sau khi portal trả lời.
+  bool startAfterProbe = false;
+  // Câu trả lời của portal về sau khi device đã huỷ thì bỏ qua.
+  std::shared_ptr<Impl *> alive = std::make_shared<Impl *>(this);
+
+  // ConnectToEIS có từ RemoteDesktop phiên bản 2.
+  static constexpr uint32_t MinRemoteDesktopVersion = 2;
+  // Bit bàn phím trong AvailableDeviceTypes.
+  static constexpr uint32_t KeyboardDeviceType = 1;
+
+  void markUnsupported(const char *reason) {
+    support = Support::Unsupported;
+    if (state == State::Idle) {
+      // Không xin quyền trên máy chắc chắn không có đường libei.
+      state = State::Failed;
+    }
+    if (debugProvider()) {
+      ARECA_INFO() << "areca: native-device unsupported reason=" << reason;
+    }
+  }
+
+  void handleProbeReply(const std::optional<PortalInfo> &info) {
+    if (!info) {
+      // Backend portal không làm RemoteDesktop (wlroots, niri...).
+      markUnsupported("no-remote-desktop-portal");
+      return;
+    }
+    if (debugProvider()) {
+      ARECA_INFO() << "areca: native-device portal remote-desktop version="
+                   << info->version
+                   << " devices=" << info->availableDeviceTypes;
+    }
+    if (info->version < MinRemoteDesktopVersion) {
+      markUnsupported("portal-without-connect-to-eis");
+    } else if (!(info->availableDeviceTypes & KeyboardDeviceType)) {
+      markUnsupported("portal-without-keyboard");
+    } else {
+      support = Support::Supported;
+      if (std::exchange(startAfterProbe, false)) {
+        startPortalWorker();
+      }
+    }
+  }
+
+  void probeSupport() {
+    if (support != Support::Unknown) {
+      return;
+    }
+    if (!wayland) {
+      markUnsupported("not-wayland");
+      return;
+    }
+    support = Support::Probing;
+    std::weak_ptr<Impl *> watch = alive;
+    portalProbe([watch](std::optional<PortalInfo> info) {
+      if (auto self = watch.lock()) {
+        (*self)->handleProbeReply(info);
+      }
+    });
+  }
 
   struct ei *connection = nullptr;
   struct ei_device *keyboard = nullptr;
@@ -418,6 +536,15 @@ struct NativeDevice::Impl {
     if (state != State::Idle) {
       return state != State::Failed;
     }
+    if (support == Support::Unsupported) {
+      state = State::Failed;
+      return false;
+    }
+    if (support == Support::Probing) {
+      // Chờ biết portal có hỗ trợ không rồi mới xin quyền.
+      startAfterProbe = true;
+      return true;
+    }
     resultFd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     workerWakeFd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (resultFd < 0 || workerWakeFd < 0) {
@@ -470,8 +597,16 @@ struct NativeDevice::Impl {
 };
 
 NativeDevice::NativeDevice(im::EventLoop &eventLoop,
-                           DebugProvider debugProvider)
-    : impl_(std::make_unique<Impl>(eventLoop, std::move(debugProvider))) {}
+                           DebugProvider debugProvider, PortalProbe portalProbe)
+    : impl_(std::make_unique<Impl>(eventLoop, std::move(debugProvider),
+                                   std::move(portalProbe))) {}
+
+void NativeDevice::probeSupport() { impl_->probeSupport(); }
+
+bool NativeDevice::isSupported() const {
+  return impl_->wayland && impl_->support == Impl::Support::Supported &&
+         impl_->state != Impl::State::Failed;
+}
 
 NativeDevice::~NativeDevice() = default;
 
