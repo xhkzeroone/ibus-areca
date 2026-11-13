@@ -15,9 +15,11 @@ struct IbusKeyEventStamp {
 // lại timestamp ổn định ngay khi nhận phím để lõi giữ nguyên logic.
 class IbusKeyEventClock {
 public:
-  // Phím client gửi lại về ngay trong cùng chu kỳ phím, sớm hơn nhịp lặp phím
-  // nhanh nhất (khoảng 16 ms ở 60 lần/giây). Cửa sổ rộng hơn sẽ nhận nhầm phím
-  // lặp thật thành phím gửi lại và làm Bamboo lệch với ô nhập.
+  // Phím client gửi lại về ngay trong cùng chu kỳ phím. Cửa sổ chỉ mở sau lần
+  // nhấn đầu, vì phím lặp đầu tiên luôn tới sau độ trễ lặp phím (≥ 100 ms);
+  // giữa các phím lặp thì khoảng cách có thể dưới 15 ms nên không mở cửa sổ,
+  // nếu không phím lặp thật bị nhận nhầm là phím gửi lại và làm Bamboo lệch
+  // với ô nhập. Mỗi lần nhấn chỉ được dùng lại timestamp một lần.
   static constexpr int kReplayWindowMs = 15;
 
   // `nowMs` là thời gian đơn điệu tính bằng ms. `forwarded` là cờ
@@ -41,10 +43,12 @@ public:
     if (forwarded && last != lastPress_.end()) {
       time = last->second.time;
     } else if (repeat && last != lastPress_.end() &&
+               last->second.replayWindowOpen &&
                nowMs - last->second.nowMs <= kReplayWindowMs) {
       time = last->second.time;
+      last->second.replayWindowOpen = false;
     } else {
-      lastPress_[keyval] = {time, nowMs};
+      lastPress_[keyval] = {time, nowMs, !repeat};
     }
     heldKeyval_ = keyval;
     heldTime_ = time;
@@ -55,6 +59,7 @@ private:
   struct Press {
     int time = 0;
     int64_t nowMs = 0;
+    bool replayWindowOpen = false;
   };
 
   // Lõi coi timestamp 0 là không có thời gian, nên không bao giờ trả về 0.

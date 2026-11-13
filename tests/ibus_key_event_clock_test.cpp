@@ -30,8 +30,13 @@ void testReplayKeepsOriginalTime() {
   assert(quick.repeat);
   assert(quick.time == original.time);
 
+  // Cửa sổ chỉ dùng được một lần.
+  const auto again = clock.stamp(kBackspace, false, false, 1000 + 12);
+  assert(again.repeat);
+  assert(again.time != original.time);
+
   const auto release = clock.stamp(kBackspace, true, false, 1100);
-  assert(release.time == original.time);
+  assert(release.time == again.time);
 
   const auto nextTap = clock.stamp(kBackspace, false, false, 1300);
   assert(!nextTap.repeat);
@@ -52,6 +57,15 @@ void testAutoRepeatGetsDistinctTimes() {
     now += step;
   }
   assert(times.size() == 6);
+
+  // Lặp phím nhanh hơn cửa sổ gửi lại: mỗi nhịp lặp vẫn có thời gian riêng.
+  IbusKeyEventClock fast;
+  std::set<int> fastTimes;
+  fastTimes.insert(fast.stamp(kBackspace, false, false, 9000).time);
+  for (int64_t at = 9250; at <= 9300; at += 10) {
+    fastTimes.insert(fast.stamp(kBackspace, false, false, at).time);
+  }
+  assert(fastTimes.size() == 7);
 }
 
 void testKeysAreTrackedSeparately() {
@@ -146,6 +160,68 @@ void testRewriteSeesReplayAndHeldBackspace() {
   assert(state->forwardedBackspacePresses.empty());
 }
 
+// Lặp phím nhanh (mỗi 10 ms): mọi nhịp lặp đều là phím thật, không được coi là
+// phím gửi lại, nếu không Bamboo sẽ còn nhớ chữ đã xoá trên màn hình.
+void testFastHeldBackspaceKeepsBambooInSync() {
+  areca::im::EventLoop loop;
+  areca::im::InputContextManager manager;
+  areca::RewriteModeHandler::StateFactory factory(
+      [](areca::im::InputContext &) {
+        return new areca::RewriteInputState("Telex 2", true, true, true,
+                                            "Unicode", false, false, 1, {});
+      });
+  TestInputContext context(manager);
+  areca::InputScheduler scheduler(
+      loop,
+      [&](areca::im::InputContext &ic) {
+        return ic.propertyFor(&factory)->engine.get();
+      },
+      [](areca::im::InputContext &) { return areca::SchedulerTiming{}; },
+      [] { return false; },
+      [](areca::im::InputContext &, const areca::BambooResult &) {
+        return areca::RewriteBackendSelection{};
+      });
+  areca::RewriteModeHandler handler(
+      loop, factory, scheduler, [] { return false; }, [] { return false; },
+      [](areca::im::InputContext &, const char *) {}, [] { return false; },
+      [](areca::im::InputContext &) { return false; },
+      [](areca::im::InputContext &) { return false; },
+      [](const areca::im::Key &) { return false; });
+  auto *state = context.propertyFor(&factory);
+  for (char c : std::string("hieepj")) {
+    state->engine->process(c, std::string(1, c));
+  }
+  assert(state->engine->currentText() == "hiệp");
+
+  IbusKeyEventClock clock;
+  auto deliver = [&](bool release, int64_t now) {
+    const auto stamp = clock.stamp(kBackspace, release, false, now);
+    areca::im::KeyEvent event(&context,
+                              areca::im::Key(areca::im::Key_BackSpace,
+                                             stamp.repeat
+                                                 ? areca::im::KeyState::Repeat
+                                                 : areca::im::KeyState::NoState,
+                                             22),
+                              release, stamp.time);
+    handler.handleKeyEvent(event);
+    assert(!event.filtered());
+  };
+
+  // Bamboo có thể dời dấu sau khi lùi, nên chỉ đếm số ký tự còn lại.
+  auto remaining = [&] {
+    return areca::im::utf8::length(state->engine->currentText());
+  };
+  deliver(false, 1000);
+  assert(remaining() == 3);
+  deliver(false, 1250);
+  assert(remaining() == 2);
+  deliver(false, 1260);
+  assert(remaining() == 1);
+  deliver(false, 1270);
+  assert(remaining() == 0);
+  deliver(true, 1280);
+}
+
 } // namespace
 
 int main() {
@@ -154,6 +230,7 @@ int main() {
   testKeysAreTrackedSeparately();
   testTimeIsNeverZero();
   testRewriteSeesReplayAndHeldBackspace();
+  testFastHeldBackspaceKeepsBambooInSync();
   std::cout << "ibus_key_event_clock_test passed\n";
   return 0;
 }
