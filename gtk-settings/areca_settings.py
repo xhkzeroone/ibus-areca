@@ -24,7 +24,7 @@ from icon_library import (
 
 
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ibus-areca" / "conf"
-APP_VERSION = "v0.1.3"  # Keep in sync with project(... VERSION ...) in CMakeLists.txt.
+APP_VERSION = "v0.1.4"  # Keep in sync with project(... VERSION ...) in CMakeLists.txt.
 MAIN_FILE = "areca.conf"
 MACRO_FILE = "areca-macro-table.conf"
 APPS_FILE = "areca-apps.conf"
