@@ -36,6 +36,8 @@ add_dependencies(areca-bamboo areca-bamboo-bridge)
 
 # Phần logic không phụ thuộc IBus, dùng chung cho engine và test.
 pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
+# Tuỳ chọn: đọc focus X11 để nhận ra ứng dụng Wine. Thiếu thì bỏ qua.
+pkg_check_modules(XCB QUIET IMPORTED_TARGET xcb)
 pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 pkg_check_modules(LIBINPUT REQUIRED IMPORTED_TARGET libinput)
@@ -80,6 +82,7 @@ add_library(areca-core STATIC
     src/uinput_device.cpp
     src/uinput_shift_select_backend.cpp
     src/window_focus_tracker.cpp
+    src/x11_focus_probe.cpp
     src/word_segment.cpp
     src/native_backspace_backend.cpp
     src/native_shift_select_backend.cpp
@@ -92,6 +95,10 @@ target_link_libraries(areca-core PUBLIC
     areca-bamboo Threads::Threads PkgConfig::GLIB PkgConfig::GIO
     PkgConfig::XKBCOMMON PkgConfig::DBUS PkgConfig::LIBEI PkgConfig::LIBPORTAL
     dl m)
+if(XCB_FOUND)
+    target_link_libraries(areca-core PUBLIC PkgConfig::XCB)
+    target_compile_definitions(areca-core PUBLIC ARECA_HAS_XCB=1)
+endif()
 if(LIBPORTAL_VERSION VERSION_GREATER_EQUAL 0.8)
     target_compile_definitions(areca-core PRIVATE ARECA_LIBPORTAL_PERSIST=1)
 endif()

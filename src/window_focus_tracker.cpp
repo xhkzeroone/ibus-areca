@@ -49,6 +49,10 @@ void WindowFocusTracker::connectionEstablished() {
 }
 
 void WindowFocusTracker::connectionLost() {
+  {
+    std::lock_guard<std::mutex> lock(focusProgramMutex_);
+    x11WineProgram_.clear();
+  }
   if (valid_.exchange(false, std::memory_order_relaxed)) {
     connectionFailureReported_.store(true, std::memory_order_relaxed);
     if (debugEnabled_.load(std::memory_order_relaxed)) {
@@ -75,6 +79,19 @@ void WindowFocusTracker::clearFocus() {
     focusProgram_.clear();
     focusClass_.clear();
   }
+}
+
+void WindowFocusTracker::pollX11Focus() {
+  std::string program = x11Probe_.focusedWineProgram();
+  std::lock_guard<std::mutex> lock(focusProgramMutex_);
+  if (program == x11WineProgram_) {
+    return;
+  }
+  if (debugEnabled_.load(std::memory_order_relaxed)) {
+    ARECA_INFO() << "areca: X11 wine focus program="
+                 << (program.empty() ? "(none)" : program);
+  }
+  x11WineProgram_ = std::move(program);
 }
 
 void WindowFocusTracker::loseFocus(const char *sender, const char *path) {
@@ -168,6 +185,8 @@ void WindowFocusTracker::runEventLoop(DBusConnection *bus) {
     }
     if (pendingFocus.pending)
       processFocusEvent(bus, pendingFocus.sender, pendingFocus.path);
+
+    pollX11Focus();
 
     if (pokeRequested_.exchange(false, std::memory_order_relaxed)) {
       accessible.pokeApps();

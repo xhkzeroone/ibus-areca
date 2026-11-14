@@ -5,6 +5,7 @@
 
 #include "input_type_detector.h"
 #include "window_focus_tracker.h"
+#include "x11_focus_probe.h"
 
 namespace areca {
 
@@ -61,6 +62,15 @@ public:
 int main() {
   using areca::InputTypeDetector;
   using areca::WindowFocusTracker;
+
+  // Tiến trình Wine nhận ra qua tên .exe; comm 15 ký tự có thể bị cắt đuôi.
+  assert(areca::isWineProgram("notepad.exe"));
+  assert(areca::isWineProgram("Notepad.EXE"));
+  assert(areca::isWineProgram("wine64-preloader"));
+  assert(areca::isWineProgram("SomeLongGame.ex"));
+  assert(!areca::isWineProgram("firefox"));
+  assert(!areca::isWineProgram("code-oss"));
+  assert(!areca::isWineProgram(""));
 
   // Case 1: Null tracker
   {
