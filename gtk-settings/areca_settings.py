@@ -104,6 +104,20 @@ ADVANCED_DEFAULTS = {
 }
 
 
+APP_TIMING_FIELDS = [
+    ("BackspaceDelayMs", "Delay giữa Backspace (ms)", 1000, "Backspace"),
+    ("AfterBackspaceWaitMs", "Chờ sau Backspace (ms)", 5000, "Backspace"),
+    ("UinputShiftSelectDelayMs", "Delay giữa các phím (ms)", 1000, "Shift+Left"),
+    ("AfterUinputShiftSelectWaitMs", "Chờ sau khi thả Shift (ms)", 5000, "Shift+Left"),
+    ("SurroundingWaitMs", "Chờ sau xóa surrounding (ms)", 5000, "Surrounding text"),
+    ("SurroundingDeleteDelayMs", "Delay xóa surrounding v2 (ms)", 1000, "Surrounding text"),
+    ("AfterSurroundingDeleteWaitMs", "Chờ sau lệnh xóa cuối (ms)", 5000, "Surrounding text"),
+    ("XTestBackspaceDelayMs", "Delay giữa Backspace Native (ms)", 1000, "Native Backspace"),
+    ("AfterXTestBackspaceWaitMs", "Chờ sau Backspace Native (ms)", 5000, "Native Backspace"),
+    ("PostCommitDelayMs", "Delay sau mỗi commit (ms)", 5000, "Chung"),
+]
+
+
 def color_channels(color: str) -> tuple[float, ...]:
     return tuple(int(color[index:index + 2], 16) / 255 for index in (1, 3, 5))
 
@@ -566,6 +580,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         .areca-content button.suggested-action:active { background: alpha(ACCENT, .32); }
         .areca-content button.flat, .status-line button.flat { background: transparent; border-color: transparent; }
         .areca-content button.flat:hover, .status-line button.flat:hover { background: alpha(FG, .08); }
+        .areca-content button.remove-action { color: @error_color; background: alpha(@error_color, .08); border-color: alpha(@error_color, .22); }
         .areca-content button.remove-action:hover, window.message .dialog-action-area button:last-child { background: alpha(@error_color, .12); color: @error_color; border-color: alpha(@error_color, .30); }
         window.message .dialog-action-area button:last-child:hover { background: alpha(@error_color, .20); border-color: alpha(@error_color, .50); }
         .areca-content button:focus-visible, .status-line button:focus-visible, window.message button:focus-visible { outline: 2px solid alpha(ACCENT, .65); outline-offset: 2px; }
@@ -1083,12 +1098,21 @@ class SettingsWindow(Gtk.ApplicationWindow):
         mode_dropdown = Gtk.DropDown.new_from_strings(APP_MODES)
         mode_dropdown.set_selected(enum_index(mode, APP_MODES))
         mode_dropdown.set_size_request(155, -1)
+        timing = {key: entry[key] for key, _label, _maximum, _group in APP_TIMING_FIELDS if key in entry}
+        delay_button = Gtk.Button(label="Delay…")
+        delay_button.set_tooltip_text("Chỉnh delay riêng cho từng backend của ứng dụng này. Chưa chỉnh thì lấy theo Nâng cao.")
         remove = icon_button("delete", "Xóa")
         remove.set_tooltip_text("Xóa cấu hình ứng dụng")
-        remove.add_css_class("flat")
         remove.add_css_class("remove-action")
+        # Cùng chiều cao và căn giữa để các cột thẳng hàng.
+        for widget in (name, mode_dropdown, delay_button, remove):
+            widget.set_valign(Gtk.Align.CENTER)
+            widget.set_size_request(widget.get_size_request()[0], 38)
+        delay_button.set_size_request(96, 38)
+        remove.set_size_request(38, 38)
         row.append(name)
         row.append(mode_dropdown)
+        row.append(delay_button)
         row.append(remove)
 
         def persist(*_args) -> None:
@@ -1097,8 +1121,71 @@ class SettingsWindow(Gtk.ApplicationWindow):
         name.connect("activate", persist)
         name.connect("notify::has-focus", lambda widget, _pspec: persist() if not widget.has_focus() else None)
         mode_dropdown.connect("notify::selected", persist)
+        row.timing = timing
+        delay_button.connect("clicked", self._open_app_timing, row, name)
         remove.connect("clicked", self._remove_app, row)
         return row
+
+    def _advanced_delay(self, key: str) -> int:
+        try:
+            return int(self.store.advanced.get("", key, str(ADVANCED_DEFAULTS.get(key, 0))))
+        except ValueError:
+            return ADVANCED_DEFAULTS.get(key, 0)
+
+    def _open_app_timing(self, _button: Gtk.Button, row: Gtk.Widget, name: Gtk.Entry) -> None:
+        window = Gtk.Window(transient_for=self, modal=True)
+        window.set_title("Delay: " + (name.get_text().strip() or "ứng dụng mới"))
+        window.set_default_size(520, 620)
+        page, content = self._page("", "Giá trị mặc định lấy từ tab Nâng cao. Chỉ giá trị khác mặc định mới được lưu riêng cho ứng dụng này.")
+        groups: dict[str, Gtk.Box] = {}
+        spins: dict[str, Gtk.SpinButton] = {}
+
+        def changed(spin: Gtk.SpinButton, key: str) -> None:
+            value = int(spin.get_value())
+            if value == self._advanced_delay(key):
+                row.timing.pop(key, None)
+            else:
+                row.timing[key] = str(value)
+            self._persist_apps()
+
+        for key, label, maximum, group_name in APP_TIMING_FIELDS:
+            if group_name not in groups:
+                groups[group_name] = self._section(content, group_name)
+            line = self._row(groups[group_name], label)
+            default = self._advanced_delay(key)
+            try:
+                current = int(row.timing.get(key, default))
+            except ValueError:
+                current = default
+            spin = Gtk.SpinButton.new_with_range(0, maximum, 1)
+            spin.set_value(max(0, min(maximum, current)))
+            spin.set_valign(Gtk.Align.CENTER)
+            spin.set_width_chars(5)
+            spin.connect("value-changed", changed, key)
+            line.append(spin)
+            spins[key] = spin
+
+        def reset(_button: Gtk.Button) -> None:
+            for key, spin in spins.items():
+                spin.set_value(self._advanced_delay(key))
+
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        footer.set_halign(Gtk.Align.END)
+        footer.set_margin_top(8)
+        footer.set_margin_bottom(8)
+        footer.set_margin_end(12)
+        restore = Gtk.Button(label="Đặt lại mặc định")
+        restore.connect("clicked", reset)
+        close = Gtk.Button(label="Xong")
+        close.add_css_class("suggested-action")
+        close.connect("clicked", lambda _b: window.close())
+        footer.append(restore)
+        footer.append(close)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.append(page)
+        box.append(footer)
+        window.set_child(box)
+        window.present()
 
     def _persist_apps(self) -> None:
         entries = []
@@ -1108,10 +1195,12 @@ class SettingsWindow(Gtk.ApplicationWindow):
             mode = name.get_next_sibling()
             app_name = name.get_text().strip()
             if app_name:
-                entries.append({
+                entry = {
                     "AppName": app_name,
                     "Mode": APP_MODES[mode.get_selected()],
-                })
+                }
+                entry.update(row.timing)
+                entries.append(entry)
             row = row.get_next_sibling()
         self.store.apps.replace_indexed("AppOverrides", entries)
         self._save_and_report("Đã lưu cấu hình ứng dụng", self.store.apps)

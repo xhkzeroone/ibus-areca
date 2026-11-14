@@ -115,7 +115,38 @@ ARECA_CONFIGURATION(
     AppBackendOverrideEntry,
     im::Option<std::string> appName{this, "AppName", N_("Tên ứng dụng"), ""};
     im::OptionWithAnnotation<AppBackendMode, im::EnumAnnotation> mode{
-        this, "Mode", N_("Chế độ / backend"), AppBackendMode::Auto};);
+        this, "Mode", N_("Chế độ / backend"), AppBackendMode::Auto};
+    // -1 là dùng giá trị ở cài đặt nâng cao.
+    im::HiddenOption<int, im::IntConstrain> backspaceDelayMs{
+        this, "BackspaceDelayMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 1000)};
+    im::HiddenOption<int, im::IntConstrain> afterBackspaceWaitMs{
+        this, "AfterBackspaceWaitMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 5000)};
+    im::HiddenOption<int, im::IntConstrain> uinputShiftSelectDelayMs{
+        this, "UinputShiftSelectDelayMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 1000)};
+    im::HiddenOption<int, im::IntConstrain> afterUinputShiftSelectWaitMs{
+        this, "AfterUinputShiftSelectWaitMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 5000)};
+    im::HiddenOption<int, im::IntConstrain> surroundingWaitMs{
+        this, "SurroundingWaitMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 5000)};
+    im::HiddenOption<int, im::IntConstrain> surroundingDeleteDelayMs{
+        this, "SurroundingDeleteDelayMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 1000)};
+    im::HiddenOption<int, im::IntConstrain> afterSurroundingDeleteWaitMs{
+        this, "AfterSurroundingDeleteWaitMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 5000)};
+    im::HiddenOption<int, im::IntConstrain> nativeBackspaceDelayMs{
+        this, "XTestBackspaceDelayMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 1000)};
+    im::HiddenOption<int, im::IntConstrain> afterNativeBackspaceWaitMs{
+        this, "AfterXTestBackspaceWaitMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 5000)};
+    im::HiddenOption<int, im::IntConstrain> postCommitDelayMs{
+        this, "PostCommitDelayMs", N_("Delay theo ứng dụng"), -1,
+        im::IntConstrain(-1, 5000)};);
 
 ARECA_CONFIGURATION(
     MacroEntry, im::Option<std::string> key{this, "Key", N_("Từ viết tắt"), ""};

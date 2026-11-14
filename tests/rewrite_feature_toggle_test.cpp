@@ -663,11 +663,27 @@ int main() {
   areca::AppBackendOverrideEntry overrideEntry;
   overrideEntry.appName.setValue("discord");
   overrideEntry.mode.setValue(areca::AppBackendMode::ShiftSelect);
+  // -1 là kế thừa cài đặt nâng cao; 0 là giá trị ghi đè thật.
+  assert(overrideEntry.backspaceDelayMs.value() == -1);
+  assert(overrideEntry.afterBackspaceWaitMs.value() == -1);
+  assert(overrideEntry.uinputShiftSelectDelayMs.value() == -1);
+  assert(overrideEntry.afterUinputShiftSelectWaitMs.value() == -1);
+  assert(overrideEntry.surroundingWaitMs.value() == -1);
+  assert(overrideEntry.surroundingDeleteDelayMs.value() == -1);
+  assert(overrideEntry.afterSurroundingDeleteWaitMs.value() == -1);
+  assert(overrideEntry.nativeBackspaceDelayMs.value() == -1);
+  assert(overrideEntry.afterNativeBackspaceWaitMs.value() == -1);
+  assert(overrideEntry.postCommitDelayMs.value() == -1);
+  overrideEntry.postCommitDelayMs.setValue(0);
+  assert(overrideEntry.postCommitDelayMs.value() == 0);
+  overrideEntry.afterBackspaceWaitMs.setValue(40);
   appProfiles.appOverrides.mutableValue()->push_back(std::move(overrideEntry));
   assert(appProfiles.appOverrides.value().size() == 1);
   assert(appProfiles.appOverrides.value()[0].appName.value() == "discord");
   assert(appProfiles.appOverrides.value()[0].mode.value() ==
          areca::AppBackendMode::ShiftSelect);
+  assert(appProfiles.appOverrides.value()[0].afterBackspaceWaitMs.value() ==
+         40);
 
   areca::AdvancedConfig advancedConfig;
   assert(!advancedConfig.useSurroundingV2InsteadOfSurroundingV1.value());

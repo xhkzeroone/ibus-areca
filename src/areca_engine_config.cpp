@@ -126,7 +126,37 @@ std::vector<MacroDefinition> ArecaEngine::macroDefinitions() const {
   return result;
 }
 
-SchedulerTiming ArecaEngine::timing(im::InputContext &) {
+SchedulerTiming ArecaEngine::timing(im::InputContext &inputContext) {
+  SchedulerTiming result = baseTiming();
+  if (appTimingOverridesMap_.empty()) {
+    return result;
+  }
+  const auto program = resolveProgram(
+      inputContext, inputContext.propertyFor(&rewriteStateFactory_));
+  const auto it = appTimingOverridesMap_.find(program);
+  if (it == appTimingOverridesMap_.end()) {
+    return result;
+  }
+  const AppTimingOverrides &o = it->second;
+  auto apply = [](int32_t value, uint32_t &target) {
+    if (value >= 0) {
+      target = static_cast<uint32_t>(value);
+    }
+  };
+  apply(o.backspaceDelayMs, result.backspaceDelayMs);
+  apply(o.afterBackspaceWaitMs, result.afterBackspaceWaitMs);
+  apply(o.uinputShiftSelectDelayMs, result.uinputShiftSelectDelayMs);
+  apply(o.afterUinputShiftSelectWaitMs, result.afterUinputShiftSelectWaitMs);
+  apply(o.surroundingWaitMs, result.surroundingWaitMs);
+  apply(o.surroundingDeleteDelayMs, result.surroundingDeleteDelayMs);
+  apply(o.afterSurroundingDeleteWaitMs, result.afterSurroundingDeleteWaitMs);
+  apply(o.nativeBackspaceDelayMs, result.nativeBackspaceDelayMs);
+  apply(o.afterNativeBackspaceWaitMs, result.afterNativeBackspaceWaitMs);
+  apply(o.postCommitDelayMs, result.postCommitDelayMs);
+  return result;
+}
+
+SchedulerTiming ArecaEngine::baseTiming() const {
   return SchedulerTiming{
       static_cast<uint32_t>(advancedConfig_.backspaceDelayMs.value()),
       static_cast<uint32_t>(
@@ -150,10 +180,26 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &) {
 
 void ArecaEngine::rebuildAppBackendOverridesMap() {
   appBackendOverridesMap_.clear();
+  appTimingOverridesMap_.clear();
   for (const auto &entry : appProfiles_.appOverrides.value()) {
     const std::string &appName = entry.appName.value();
     if (!appName.empty()) {
       appBackendOverridesMap_[appName] = entry.mode.value();
+      AppTimingOverrides timing;
+      timing.backspaceDelayMs = entry.backspaceDelayMs.value();
+      timing.afterBackspaceWaitMs = entry.afterBackspaceWaitMs.value();
+      timing.uinputShiftSelectDelayMs = entry.uinputShiftSelectDelayMs.value();
+      timing.afterUinputShiftSelectWaitMs =
+          entry.afterUinputShiftSelectWaitMs.value();
+      timing.surroundingWaitMs = entry.surroundingWaitMs.value();
+      timing.surroundingDeleteDelayMs = entry.surroundingDeleteDelayMs.value();
+      timing.afterSurroundingDeleteWaitMs =
+          entry.afterSurroundingDeleteWaitMs.value();
+      timing.nativeBackspaceDelayMs = entry.nativeBackspaceDelayMs.value();
+      timing.afterNativeBackspaceWaitMs =
+          entry.afterNativeBackspaceWaitMs.value();
+      timing.postCommitDelayMs = entry.postCommitDelayMs.value();
+      appTimingOverridesMap_[appName] = timing;
     }
   }
 }

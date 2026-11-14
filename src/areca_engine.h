@@ -41,6 +41,20 @@ class MouseClickTracker;
 
 // Lõi bộ gõ dùng chung cho mọi input context trong process. Engine
 // IBus của từng ô nhập chuyển sự kiện vào đây.
+// Mỗi trường là timing của SchedulerTiming; -1 là chưa ghi đè.
+struct AppTimingOverrides {
+  int32_t backspaceDelayMs = -1;
+  int32_t afterBackspaceWaitMs = -1;
+  int32_t uinputShiftSelectDelayMs = -1;
+  int32_t afterUinputShiftSelectWaitMs = -1;
+  int32_t surroundingWaitMs = -1;
+  int32_t surroundingDeleteDelayMs = -1;
+  int32_t afterSurroundingDeleteWaitMs = -1;
+  int32_t nativeBackspaceDelayMs = -1;
+  int32_t afterNativeBackspaceWaitMs = -1;
+  int32_t postCommitDelayMs = -1;
+};
+
 class ArecaEngine final {
 public:
   explicit ArecaEngine(EngineHost &host);
@@ -77,6 +91,7 @@ private:
   static const char *presentationModeName(PresentationMode mode);
   void switchPresentationMode(im::InputContext &inputContext);
   SchedulerTiming timing(im::InputContext &inputContext);
+  SchedulerTiming baseTiming() const;
   bool debugEnabled() const { return config_.debug.value(); }
   RewriteBackendSelection selectRewriteBackend(im::InputContext &inputContext,
                                                const BambooResult &result);
@@ -145,6 +160,8 @@ private:
   uint64_t macroRevision_ = 1;
   uint64_t nextPreeditRecoveryTransactionId_ = 1;
   std::unordered_map<std::string, AppBackendMode> appBackendOverridesMap_;
+  // Timing riêng của từng app. Trường nào chưa đặt thì lấy ở cài đặt nâng cao.
+  std::unordered_map<std::string, AppTimingOverrides> appTimingOverridesMap_;
   std::unordered_map<std::string, AppBackendMode> lastAutoBackendByApp_;
   // Backend rewrite gần nhất của mỗi app có phải surrounding không. Không xoá ở
   // reset để restore sau click vẫn biết app có dùng surrounding.
