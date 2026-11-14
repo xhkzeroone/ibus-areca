@@ -20,6 +20,7 @@
       <icon>ibus-areca</icon>
       <symbol>Ă</symbol>
       <rank>0</rank>
+      <setup>@CMAKE_INSTALL_FULL_BINDIR@/ibus-areca-settings</setup>
     </engine>
   </engines>
 </component>

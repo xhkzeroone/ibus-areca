@@ -177,6 +177,9 @@ install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/ibus-areca-settings"
 install(FILES "data/areca-settings.desktop"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
         RENAME "io.github.areca.IBusSettings.desktop")
+# GNOME Settings mở nút Preferences của engine bằng file này, tên theo engine.
+install(FILES "data/ibus-setup-areca.desktop"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
 
 # Quyền /dev/uinput cho backend Backspace/Shift-select phần cứng và quyền đọc
 # chuột cho ibus-areca-mouse-monitor.

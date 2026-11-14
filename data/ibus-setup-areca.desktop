@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Areca Preferences
+Name[vi]=Cài đặt Areca
+Comment=Configure the Areca Vietnamese input method
+Exec=ibus-areca-settings
+Icon=ibus-areca-settings
+NoDisplay=true
+Terminal=false
+StartupWMClass=io.github.areca.IBusSettings
