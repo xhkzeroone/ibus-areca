@@ -5,7 +5,7 @@
 
 #include "input_type_detector.h"
 #include "window_focus_tracker.h"
-#include "x11_focus_probe.h"
+#include "x11_focus_arbiter.h"
 
 namespace areca {
 
@@ -63,14 +63,27 @@ int main() {
   using areca::InputTypeDetector;
   using areca::WindowFocusTracker;
 
-  // Tiến trình Wine nhận ra qua tên .exe; comm 15 ký tự có thể bị cắt đuôi.
-  assert(areca::isWineProgram("notepad.exe"));
-  assert(areca::isWineProgram("Notepad.EXE"));
-  assert(areca::isWineProgram("wine64-preloader"));
-  assert(areca::isWineProgram("SomeLongGame.ex"));
-  assert(!areca::isWineProgram("firefox"));
-  assert(!areca::isWineProgram("code-oss"));
-  assert(!areca::isWineProgram(""));
+  {
+    using namespace std::chrono_literals;
+    areca::X11FocusArbiter arbiter(300ms);
+    const auto t0 = areca::X11FocusArbiter::Clock::now();
+    // App không có AT-SPI: sau thời gian chờ thì dùng tên X11.
+    arbiter.noteX11Program("notepad.exe", t0);
+    assert(arbiter.program(t0 + 100ms).empty());
+    assert(arbiter.program(t0 + 400ms) == "notepad.exe");
+    // AT-SPI báo focus sau khi X11 đổi thì AT-SPI thắng.
+    arbiter.noteX11Program("firefox", t0 + 1000ms);
+    arbiter.noteAtspiFocus(t0 + 1100ms);
+    assert(arbiter.program(t0 + 2000ms).empty());
+    // Chưa có cửa sổ X11 focus (app Wayland gốc) thì không ghi đè.
+    arbiter.noteX11Program("", t0 + 3000ms);
+    assert(arbiter.program(t0 + 4000ms).empty());
+    // Sự kiện AT-SPI đến muộn thì thu hồi tên X11 đã dùng.
+    arbiter.noteX11Program("code", t0 + 5000ms);
+    assert(arbiter.program(t0 + 5400ms) == "code");
+    arbiter.noteAtspiFocus(t0 + 5500ms);
+    assert(arbiter.program(t0 + 5600ms).empty());
+  }
 
   // Case 1: Null tracker
   {

@@ -5,6 +5,7 @@
 #include <string>
 #include <thread>
 
+#include "x11_focus_arbiter.h"
 #include "x11_focus_probe.h"
 
 typedef struct DBusConnection DBusConnection;
@@ -38,23 +39,24 @@ public:
 
   BrowserFocus browserFocus() const {
     std::lock_guard<std::mutex> lock(focusProgramMutex_);
-    if (!x11WineProgram_.empty()) {
-      return {x11WineProgram_, {}};
+    if (!x11Program_.empty()) {
+      return {x11Program_, {}};
     }
     return {focusProgram_, focusClass_};
   }
 
   bool isTerminalFocused() const {
     std::lock_guard<std::mutex> lock(focusProgramMutex_);
-    return x11WineProgram_.empty() &&
+    return x11Program_.empty() &&
            focusInTerminal_.load(std::memory_order_relaxed);
   }
 
-  // Wine không báo focus qua AT-SPI nên tên từ AT-SPI có thể là của app trước.
-  // Khi X11 báo cửa sổ Wine đang focus thì tên đó đúng hơn.
+  // Ứng dụng không có AT-SPI không báo focus nên tên từ AT-SPI có thể là của
+  // app trước. Khi X11 báo cửa sổ khác đang focus mà AT-SPI vẫn im thì dùng tên
+  // X11.
   std::string focusProgram() const {
     std::lock_guard<std::mutex> lock(focusProgramMutex_);
-    return x11WineProgram_.empty() ? focusProgram_ : x11WineProgram_;
+    return x11Program_.empty() ? focusProgram_ : x11Program_;
   }
 
 private:
@@ -104,10 +106,11 @@ private:
   mutable std::mutex focusProgramMutex_;
   std::string focusProgram_;
   std::string focusClass_;
-  // Chỉ có giá trị khi cửa sổ X11 đang focus là tiến trình Wine.
-  std::string x11WineProgram_;
+  // Chỉ có giá trị khi AT-SPI không báo focus cho cửa sổ X11 hiện tại.
+  std::string x11Program_;
   // Thuộc thread theo dõi.
   X11FocusProbe x11Probe_;
+  X11FocusArbiter x11Arbiter_;
 };
 
 } // namespace areca

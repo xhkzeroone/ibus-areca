@@ -2,29 +2,11 @@
 
 #include "atspi/atspi_accessible.h"
 
-#include <algorithm>
-#include <cctype>
-
 #ifdef ARECA_HAS_XCB
 #include <xcb/xcb.h>
 #endif
 
 namespace areca {
-
-bool isWineProgram(std::string_view program) {
-  std::string lower(program);
-  std::transform(lower.begin(), lower.end(), lower.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  const std::string_view name = lower;
-  if (name.starts_with("wine")) {
-    return true;
-  }
-  if (name.ends_with(".exe")) {
-    return true;
-  }
-  return name.size() >= 15 &&
-         (name.ends_with(".ex") || name.ends_with(".e") || name.ends_with("."));
-}
 
 #ifdef ARECA_HAS_XCB
 
@@ -117,7 +99,7 @@ struct X11FocusProbe::Impl {
     return 0;
   }
 
-  std::string focusedWineProgram() {
+  std::string focusedProgram() {
     if (!ensureConnected()) {
       return {};
     }
@@ -141,7 +123,7 @@ struct X11FocusProbe::Impl {
     lastFocus = window;
     const std::string program =
         AtspiAccessible::programForProcess(pidOfWindow(window));
-    lastProgram = isWineProgram(program) ? program : std::string();
+    lastProgram = program;
     return lastProgram;
   }
 };
@@ -149,7 +131,7 @@ struct X11FocusProbe::Impl {
 #else
 
 struct X11FocusProbe::Impl {
-  std::string focusedWineProgram() { return {}; }
+  std::string focusedProgram() { return {}; }
 };
 
 #endif
@@ -157,8 +139,6 @@ struct X11FocusProbe::Impl {
 X11FocusProbe::X11FocusProbe() : impl_(std::make_unique<Impl>()) {}
 X11FocusProbe::~X11FocusProbe() = default;
 
-std::string X11FocusProbe::focusedWineProgram() {
-  return impl_->focusedWineProgram();
-}
+std::string X11FocusProbe::focusedProgram() { return impl_->focusedProgram(); }
 
 } // namespace areca

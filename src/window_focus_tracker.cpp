@@ -51,7 +51,7 @@ void WindowFocusTracker::connectionEstablished() {
 void WindowFocusTracker::connectionLost() {
   {
     std::lock_guard<std::mutex> lock(focusProgramMutex_);
-    x11WineProgram_.clear();
+    x11Program_.clear();
   }
   if (valid_.exchange(false, std::memory_order_relaxed)) {
     connectionFailureReported_.store(true, std::memory_order_relaxed);
@@ -82,16 +82,22 @@ void WindowFocusTracker::clearFocus() {
 }
 
 void WindowFocusTracker::pollX11Focus() {
-  std::string program = x11Probe_.focusedWineProgram();
+  const auto now = X11FocusArbiter::Clock::now();
+  std::string program = x11Probe_.focusedProgram();
+  if (AtspiAccessible::isWindowManagerProgram(program)) {
+    program.clear();
+  }
+  x11Arbiter_.noteX11Program(program, now);
+  std::string chosen = x11Arbiter_.program(now);
   std::lock_guard<std::mutex> lock(focusProgramMutex_);
-  if (program == x11WineProgram_) {
+  if (chosen == x11Program_) {
     return;
   }
   if (debugEnabled_.load(std::memory_order_relaxed)) {
-    ARECA_INFO() << "areca: X11 wine focus program="
-                 << (program.empty() ? "(none)" : program);
+    ARECA_INFO() << "areca: X11 focus program override="
+                 << (chosen.empty() ? "(none)" : chosen);
   }
-  x11WineProgram_ = std::move(program);
+  x11Program_ = std::move(chosen);
 }
 
 void WindowFocusTracker::loseFocus(const char *sender, const char *path) {
@@ -285,6 +291,7 @@ void WindowFocusTracker::processFocusEvent(DBusConnection *bus,
                                            const std::string &sender,
                                            const std::string &path) {
   clearFocus();
+  x11Arbiter_.noteAtspiFocus(X11FocusArbiter::Clock::now());
   focusBus_ = sender;
   focusPath_ = path;
 
