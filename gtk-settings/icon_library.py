@@ -85,8 +85,42 @@ def prepare_icon(source: Path, target: str) -> tuple[str, Path]:
         if not success:
             raise ValueError("Không tạo được kích thước biểu tượng")
         atomic_write(data_home() / f"icons/hicolor/{size}x{size}/apps/{name}.png", data)
+    write_inactive_variants(canvas, name)
     refresh_icon_theme()
     return name, data_home() / f"icons/hicolor/256x256/apps/{name}.png"
+
+
+def write_inactive_variants(canvas: GdkPixbuf.Pixbuf, name: str) -> None:
+    """Ghi bản xám `<name>-inactive` để khay đổi màu khi Areca không được chọn."""
+    gray = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, canvas.get_width(), canvas.get_height())
+    canvas.saturate_and_pixelate(gray, 0.0, False)
+    inactive = f"{name}-inactive"
+    success, payload = gray.save_to_bufferv("png", [], [])
+    if not success:
+        raise ValueError("Không tạo được biểu tượng xám")
+    atomic_write(data_home() / f"icons/{inactive}.png", payload)
+    for size in (32, 64, 128, 256):
+        scaled = gray if size == gray.get_width() else gray.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+        success, data = scaled.save_to_bufferv("png", [], [])
+        if not success:
+            raise ValueError("Không tạo được kích thước biểu tượng xám")
+        atomic_write(data_home() / f"icons/hicolor/{size}x{size}/apps/{inactive}.png", data)
+
+
+def ensure_inactive_icon(name: str) -> bool:
+    """Tạo bản xám cho icon khay đã chọn từ trước khi có tính năng này."""
+    if not name or name.endswith("-inactive"):
+        return False
+    source = data_home() / f"icons/hicolor/256x256/apps/{name}.png"
+    target = data_home() / f"icons/{name}-inactive.png"
+    if target.exists() or not source.is_file():
+        return False
+    try:
+        write_inactive_variants(GdkPixbuf.Pixbuf.new_from_file(str(source)), name)
+    except (OSError, GLib.Error, ValueError):
+        return False
+    refresh_icon_theme()
+    return True
 
 
 def refresh_icon_theme() -> None:

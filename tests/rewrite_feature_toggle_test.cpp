@@ -692,6 +692,8 @@ int main() {
   assert(advancedConfig.surroundingProbeTimeoutMs.value() == 80);
 
   areca::ArecaConfig mainConfig;
+  // Biểu tượng khay riêng mặc định tắt để hành vi cũ không đổi.
+  assert(!mainConfig.showTrayIcon.value());
   assert(!mainConfig.shiftSelectFallbackForBrowser.value());
   assert(mainConfig.useBackspaceForUrl.value());
   assert(!mainConfig.disableVietnameseInTerminal.value());

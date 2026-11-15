@@ -273,6 +273,8 @@ ARECA_CONFIGURATION(
         im::IntConstrain(0, 5000)};
     im::HiddenOption<std::string> trayIcon{
         this, "TrayIcon", N_("Biểu tượng khay hệ thống"), "ibus-areca"};
+    im::Option<bool> showTrayIcon{
+        this, "ShowTrayIcon", N_("Hiện biểu tượng trên thanh hệ thống"), false};
     im::OptionWithAnnotation<std::string, StringListAnnotation>
         bambooInputMethod{this, "BambooInputMethod", N_("Kiểu gõ Bamboo"),
                           "Telex 2"};

@@ -65,6 +65,8 @@ public:
   void keyEvent(im::KeyEvent &event);
   std::string subMode(im::InputContext &inputContext);
   std::string overrideIcon();
+  bool trayIconEnabled() const { return config_.showTrayIcon.value(); }
+  bool debugLoggingEnabled() const { return config_.debug.value(); }
   std::string subModeLabel(im::InputContext &inputContext);
   void activate(im::InputContext &inputContext);
   void deactivate(im::InputContext &inputContext);

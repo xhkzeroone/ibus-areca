@@ -25,6 +25,26 @@ void registerComponent(IBusBus *bus) {
 
 void onDisconnected(IBusBus *, gpointer) { ibus_quit(); }
 
+void onGlobalEngineChanged(IBusBus *, const gchar *name, gpointer) {
+  areca::IbusHost::instance().setGlobalEngine(name ? name : "");
+}
+
+// Lúc khởi động hỏi engine đang chọn: ibus-daemon nạp sẵn engine trong danh
+// sách nguồn nhập nên tiến trình có thể chạy khi Areca chưa được chọn.
+void onGlobalEngineQueried(GObject *source, GAsyncResult *result, gpointer) {
+  GError *error = nullptr;
+  IBusEngineDesc *desc =
+      ibus_bus_get_global_engine_async_finish(IBUS_BUS(source), result, &error);
+  if (error) {
+    g_error_free(error);
+  }
+  if (desc) {
+    areca::IbusHost::instance().setGlobalEngine(
+        ibus_engine_desc_get_name(desc));
+    g_object_unref(desc);
+  }
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -57,7 +77,12 @@ int main(int argc, char **argv) {
 
   // Khởi tạo lõi trước khi nhận engine đầu tiên để cấu hình, AT-SPI và thiết
   // bị phát phím sẵn sàng.
-  areca::IbusHost::instance();
+  areca::IbusHost::instance().setBus(bus);
+  ibus_bus_set_watch_ibus_signal(bus, TRUE);
+  g_signal_connect(bus, "global-engine-changed",
+                   G_CALLBACK(onGlobalEngineChanged), nullptr);
+  ibus_bus_get_global_engine_async(bus, 2000, nullptr, onGlobalEngineQueried,
+                                   nullptr);
 
   IBusFactory *factory = ibus_factory_new(ibus_bus_get_connection(bus));
   ibus_factory_add_engine(factory, kEngineName, areca_ibus_engine_get_type());

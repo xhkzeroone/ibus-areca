@@ -8,6 +8,7 @@
 
 #include "areca_engine.h"
 #include "engine_host.h"
+#include "ibus/status_notifier.h"
 
 namespace areca {
 
@@ -31,6 +32,15 @@ public:
                         int timeoutMs) override;
   std::string configDirectory() const override;
 
+  // Engine do IBus báo là engine đang chọn (tín hiệu global-engine-changed hoặc
+  // truy vấn lúc khởi động). Chưa nhận được thì dựa vào enable/disable.
+  void setGlobalEngine(const std::string &name);
+  // Bus dùng chung của process để menu khay chọn engine và khởi động lại IBus.
+  void setBus(IBusBus *bus) { bus_ = bus; }
+  // Engine instance của một input context được bật hoặc tắt.
+  void engineEnabled(IbusInputContext *context);
+  void engineDisabled(IbusInputContext *context);
+
   void addContext(IbusInputContext *context);
   void removeContext(IbusInputContext *context);
   void setFocusedContext(IbusInputContext *context) {
@@ -43,11 +53,19 @@ private:
   void watchConfigDirectory();
   void scheduleConfigReload();
   void scheduleStatusRefresh();
+  void syncTrayIcon();
+  bool arecaActive() const;
+  std::vector<StatusNotifierItem::MenuItem> buildTrayMenu();
 
   im::EventLoop eventLoop_;
   std::vector<IbusInputContext *> contexts_;
   IbusInputContext *focusedContext_ = nullptr;
+  std::vector<IbusInputContext *> enabledContexts_;
+  IBusBus *bus_ = nullptr;
+  bool globalEngineKnown_ = false;
+  bool globalEngineIsAreca_ = false;
   std::unique_ptr<ArecaEngine> engine_;
+  std::unique_ptr<StatusNotifierItem> trayItem_;
   GFileMonitor *configMonitor_ = nullptr;
   std::unique_ptr<im::EventSourceTime> configReloadTimer_;
   std::unique_ptr<im::EventSource> statusRefresh_;

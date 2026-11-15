@@ -87,12 +87,16 @@ void reset(IBusEngine *engine) {
 
 void enable(IBusEngine *engine) {
   IBUS_ENGINE_CLASS(areca_ibus_engine_parent_class)->enable(engine);
+  if (auto *context = contextOf(engine)) {
+    areca::IbusHost::instance().engineEnabled(context);
+  }
   core().announceSwitchedIn();
 }
 
 void disable(IBusEngine *engine) {
   if (auto *context = contextOf(engine)) {
     core().deactivate(*context);
+    areca::IbusHost::instance().engineDisabled(context);
   }
   IBUS_ENGINE_CLASS(areca_ibus_engine_parent_class)->disable(engine);
 }

@@ -19,7 +19,8 @@ from gi.repository import Gdk, Gio, GLib, Gtk
 
 from icon_library import (
     APP_ID, DEFAULT_TRAY_ICON, ORIGINAL_ICON, PRESETS, atomic_write,
-    desktop_entry, icon_button, prepare_icon, refresh_launcher_name, ui_icon,
+    desktop_entry, ensure_inactive_icon, icon_button, prepare_icon,
+    refresh_launcher_name, ui_icon,
 )
 
 
@@ -77,6 +78,7 @@ MAIN_DEFAULTS = {
     "ShiftSelectFallbackForBrowser": False,
     "UseBackspaceForUrl": True,
     "DisableVietnameseInTerminal": False,
+    "ShowTrayIcon": False,
     "Debug": False,
 }
 MAIN_KEY_LIST_DEFAULTS = {"SwitchModeKey": [], "SelectBackendKey": ["grave"]}
@@ -444,6 +446,8 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self.set_default_size(1024, 720)
         self.set_size_request(860, 500)
         self.store = ConfigStore()
+        # Icon khay chọn từ bản cũ chưa có bản xám; tạo bù để khay đổi màu được.
+        ensure_inactive_icon(self.store.main.get("", "TrayIcon", ""))
         self.appearance = ConfigDocument(CONFIG_DIR / "areca-gtk-settings.conf")
         saved_theme = self.appearance.get("Appearance", "Theme", "Light")
         self.theme = saved_theme if saved_theme in THEMES else "Light"
@@ -1412,6 +1416,12 @@ class SettingsWindow(Gtk.ApplicationWindow):
 
     def _build_icons(self) -> Gtk.Widget:
         page, content = self._page("Biểu tượng", "Một chút vui vẻ cho Areca. Chọn một biểu tượng để dùng cho cả Settings và khay hệ thống.")
+        tray = self._section(content, "Khay hệ thống")
+        self._switch(
+            tray, "Hiện biểu tượng trên thanh hệ thống",
+            "ShowTrayIcon",
+            "GNOME chỉ hiện chữ cho chỉ báo bộ gõ. Bật mục này để Areca thêm một biểu tượng ảnh; cần extension AppIndicator (gnome-shell-extension-appindicator). Bấm vào biểu tượng để mở Cài đặt.",
+        )
         current = self._section(content, "Biểu tượng đang dùng")
         row = self._row(
             current, "Settings và khay hệ thống",

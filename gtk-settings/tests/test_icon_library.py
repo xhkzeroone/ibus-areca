@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from icon_library import PRESETS, APP_ID, desktop_entry, prepare_icon
+from icon_library import PRESETS, APP_ID, desktop_entry, ensure_inactive_icon, prepare_icon
 from gi.repository import GdkPixbuf, Gio, GLib
 
 
@@ -32,6 +32,25 @@ class IconLibraryTests(unittest.TestCase):
                     self.assertEqual((image.get_width(), image.get_height()), (size, size))
                 self.assertEqual(prepare_icon(source, 'Settings')[0], name)
         self.assertEqual(len(names), len(PRESETS))
+
+    def test_inactive_variant_is_gray_and_can_be_backfilled(self):
+        source = next(iter(PRESETS.values()))[1]
+        name, _ = prepare_icon(source, 'Tray')
+        data = self.root / 'data/icons'
+        gray = GdkPixbuf.Pixbuf.new_from_file(str(data / f'{name}-inactive.png'))
+        pixels, stride, channels = gray.get_pixels(), gray.get_rowstride(), gray.get_n_channels()
+        checked = 0
+        for y in range(0, gray.get_height(), 8):
+            for x in range(0, gray.get_width(), 8):
+                r, g, b, a = pixels[y * stride + x * channels:y * stride + x * channels + 4]
+                if a:
+                    checked += 1
+                    self.assertLessEqual(max(r, g, b) - min(r, g, b), 2)
+        self.assertGreater(checked, 0)
+        (data / f'{name}-inactive.png').unlink()
+        self.assertTrue(ensure_inactive_icon(name))
+        self.assertTrue((data / f'{name}-inactive.png').exists())
+        self.assertFalse(ensure_inactive_icon(name))
 
     def test_non_square_photo_keeps_aspect_ratio_and_survives_source_removal(self):
         source = self.root / 'wide.png'

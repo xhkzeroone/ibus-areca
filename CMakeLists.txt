@@ -131,6 +131,8 @@ if(BUILD_TESTING)
         add_test(NAME ${name} COMMAND ${name})
     endforeach()
     target_link_libraries(areca_engine_test PRIVATE areca-engine)
+    # Logic menu dbusmenu của khay không cần session bus nên test được trực tiếp.
+    target_sources(status_notifier_test PRIVATE src/ibus/status_notifier.cpp)
     # Biên dịch lại tracker để trỏ tới helper giả thay vì đường dẫn cài đặt.
     target_sources(mouse_click_tracker_test PRIVATE src/mouse_click_tracker.cpp)
     add_dependencies(mouse_click_tracker_test mouse_click_tracker_helper)
@@ -148,11 +150,13 @@ if(IBUS_FOUND)
         src/ibus/ibus_host.cpp
         src/ibus/ibus_input_context.cpp
         src/ibus/main.cpp
+        src/ibus/status_notifier.cpp
     )
     target_compile_options(ibus-engine-areca PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_definitions(ibus-engine-areca PRIVATE
         ARECA_VERSION="${PROJECT_VERSION}"
-        ARECA_EXEC_PATH="${ARECA_EXEC_PATH}")
+        ARECA_EXEC_PATH="${ARECA_EXEC_PATH}"
+        ARECA_SETTINGS_PATH="${CMAKE_INSTALL_FULL_BINDIR}/ibus-areca-settings")
     target_link_libraries(ibus-engine-areca PRIVATE areca-engine PkgConfig::IBUS)
     install(TARGETS ibus-engine-areca DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
 
