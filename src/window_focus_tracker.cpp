@@ -189,10 +189,13 @@ void WindowFocusTracker::runEventLoop(DBusConnection *bus) {
       processMessage(message.get(), schedule, pendingFocus);
       message.reset(dbus_connection_pop_message(bus));
     }
+    // Hỏi X11 trước khi xử lý focus AT-SPI của lượt này. Cửa sổ quản lý đổi
+    // focus X11 trước khi app báo focus qua AT-SPI, nên nếu hỏi sau thì lần đổi
+    // X11 trông như mới hơn AT-SPI và tên X11 bị dùng nhầm cho app có AT-SPI.
+    pollX11Focus();
+
     if (pendingFocus.pending)
       processFocusEvent(bus, pendingFocus.sender, pendingFocus.path);
-
-    pollX11Focus();
 
     if (pokeRequested_.exchange(false, std::memory_order_relaxed)) {
       accessible.pokeApps();
