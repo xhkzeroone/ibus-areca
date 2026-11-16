@@ -58,7 +58,6 @@ add_library(areca-core STATIC
     src/im/key.cpp
     src/im/log_writer.cpp
     src/im/raw_config.cpp
-    src/adaptive_wait_monitor.cpp
     src/atspi/atspi_accessible.cpp
     src/atspi/atspi_connection.cpp
     src/bamboo_engine_adapter.cpp

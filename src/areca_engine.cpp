@@ -38,8 +38,6 @@ ArecaEngine::ArecaEngine(EngineHost &host)
             macroRevision_, macroDefinitions(),
             config_.revertMacroOnBackspace.value());
       }),
-      adaptiveWaitMonitor_(host_.eventLoop(), adaptiveWait_,
-                           [this]() { return debugEnabled(); }),
       surroundingBackend_(
           host_.eventLoop(), [this]() { return debugEnabled(); },
           [this](im::InputContext &inputContext) {
