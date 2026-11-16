@@ -9,5 +9,6 @@ danh sách PR và đoạn cài đặt.
 Quy trình đầy đủ khi tăng version, tạo tag và ra bản: xem skill
 `.claude/skills/areca-release/SKILL.md`.
 
-Bản thử nghiệm: dòng đầu tiên của file là `<!-- prerelease -->`; release sẽ được gắn nhãn
-Pre-release và installer không tự cài.
+Bản thử nghiệm: phát hành như bản thường, ghi một dòng in đậm "THỬ NGHIỆM" ngay dưới tiêu đề.
+Chỉ khi cần gắn nhãn Pre-release (installer không tự cài) mới để dòng đầu tiên của file là
+`<!-- prerelease -->`.
