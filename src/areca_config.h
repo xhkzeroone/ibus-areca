@@ -232,9 +232,10 @@ ARECA_CONFIGURATION(
     im::Option<bool> enableMouseTracking{
         this, "EnableMouseTracking", N_("Tự reset bộ gõ sau khi click chuột"),
         true};
-    im::Option<bool> forwardFirstCharacter{
-        this, "ForwardFirstCharacter",
-        N_("Chuyển tiếp phím đầu để tương thích trình duyệt"), true};);
+    // Không đưa ra app cài đặt; vẫn tắt được bằng cách sửa tay file cấu hình.
+    im::HiddenOption<bool> forwardFirstCharacter{
+        this, "ForwardFirstCharacter", N_("Chuyển tiếp phím đầu cho ứng dụng"),
+        true};);
 
 ARECA_CONFIGURATION(
     ArecaConfig,

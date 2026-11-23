@@ -184,7 +184,7 @@ void testUrlFieldUsesMarkerAndBackspace() {
   typeText(engine, context, "vieet");
   runFor(2000);
   assert(context.text == "viêt");
-  // Phím đầu "v" được forward nguyên cho trình duyệt nên không có commit.
+  // Phím đầu "v" được forward nguyên cho ứng dụng nên không có commit.
   const std::vector<std::string> expected = {
       "commit:i",  "commit:e", "commit:\xC2\xB7", "backspace",
       "backspace", "commit:ê", "commit:t"};

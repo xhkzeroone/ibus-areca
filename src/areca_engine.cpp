@@ -104,13 +104,10 @@ ArecaEngine::ArecaEngine(EngineHost &host, EmojiAnnotationLoader emojiLoader)
             protectBackendVerdict(inputContext, reason);
           },
           [this]() { return backspaceRecoveryEnabled(); },
-          [this](im::InputContext &inputContext) {
-            if (!advancedConfig_.forwardFirstCharacter.value()) {
-              return false;
-            }
-            auto *state = inputContext.propertyFor(&rewriteStateFactory_);
-            return inputTypeDetector_.isBrowser(
-                resolveProgram(inputContext, state));
+          // Mọi ứng dụng: phím đầu không đổi đầu ra đi thẳng qua frontend, nên
+          // editor web hay app nào cần phím thật đều nhận được.
+          [this](im::InputContext &) {
+            return advancedConfig_.forwardFirstCharacter.value();
           },
           [this](im::InputContext &inputContext) {
             if (!config_.restoreSurroundingText.value()) {

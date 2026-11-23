@@ -43,7 +43,7 @@ Bamboo bridge cung cấp: `ArecaBambooCreate(method, modernStyle)`, `Destroy`, `
 - **Chặn reset 50 ms sau commit** (`kResetRejectWindowUsec`), và chặn suốt lúc đang rewrite. Trình duyệt hay gửi reset vài chục ms sau khi chữ trong ô đổi; để lọt reset đó thì mất từ đang gõ và restore chạy giữa từ, gây lặp chữ. Đánh đổi: Backspace hay phím mũi tên thật của người dùng trong 50 ms đó bị coi như phím Areca tự phát.
 - Chỉ scheduler và backend được commit hoặc xoá surrounding ở Rewrite.
 
-**Phím đầu từ khi rảnh** (`ForwardFirstCharacter`, trình duyệt): Bamboo xử lý phím đúng một lần; nếu đầu ra không đổi thì để phím gốc đi tiếp cho ứng dụng (editor web cần thấy key event thật để mở chế độ soạn thảo).
+**Phím đầu từ khi rảnh** (`ForwardFirstCharacter`, mọi ứng dụng, option ẩn mặc định bật, chỉ tắt bằng cách sửa tay `areca-advanced.conf`): Bamboo xử lý phím đúng một lần; nếu đầu ra không đổi thì để phím gốc đi tiếp cho ứng dụng (editor web cần thấy key event thật để mở chế độ soạn thảo).
 
 ## Backend xoá chữ và cách chọn
 
@@ -117,7 +117,7 @@ Lưu ý khi port scheduler: IBus đòi `process-key-event` trả về ngay. Như
 
 ## Cấu hình người dùng cần giữ
 
-`areca.conf` (khoá ini, mặc định): `BambooInputMethod` (Telex 2), `OutputCharset` (Unicode), `SpellcheckMode` (khôi phục ngay khi gõ), `ModernStyle` (true), `EnableMacro` (true), `CapitalizeMacro` (true), `RevertMacroOnBackspace` (true), `MacroBypassModifier` (Shift), `AutoCapitalizeAfterPunctuation` (false), `BackspaceRecovery` (true), `RestoreSurroundingText` (false), `DisableVietnameseInTerminal` (false), `Debug` (false). `areca-advanced.conf` giữ timing từng backend, `AfterMarkerCommitWaitMs` (10, ẩn khỏi app cài đặt, chỉ sửa tay) và các lựa chọn uinput/Native, mouse tracking, phím đầu. Định nghĩa đầy đủ trong `src/areca_config.h`.
+`areca.conf` (khoá ini, mặc định): `BambooInputMethod` (Telex 2), `OutputCharset` (Unicode), `SpellcheckMode` (khôi phục ngay khi gõ), `ModernStyle` (true), `EnableMacro` (true), `CapitalizeMacro` (true), `RevertMacroOnBackspace` (true), `MacroBypassModifier` (Shift), `AutoCapitalizeAfterPunctuation` (false), `BackspaceRecovery` (true), `RestoreSurroundingText` (false), `DisableVietnameseInTerminal` (false), `Debug` (false). `areca-advanced.conf` giữ timing từng backend, `AfterMarkerCommitWaitMs` (10, ẩn khỏi app cài đặt, chỉ sửa tay) và các lựa chọn uinput/Native, mouse tracking, `ForwardFirstCharacter` (true, ẩn, chỉ sửa tay). Định nghĩa đầy đủ trong `src/areca_config.h`.
 
 ## Kiểm thử
 
