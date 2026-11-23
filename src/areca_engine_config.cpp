@@ -157,7 +157,7 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &inputContext) {
 }
 
 SchedulerTiming ArecaEngine::baseTiming() const {
-  return SchedulerTiming{
+  SchedulerTiming timing{
       static_cast<uint32_t>(advancedConfig_.backspaceDelayMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.uinputBackspaceAckTimeoutMs.value()),
@@ -176,6 +176,10 @@ SchedulerTiming ArecaEngine::baseTiming() const {
       static_cast<uint32_t>(advancedConfig_.afterNativeBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.postCommitDelayMs.value()),
       advancedConfig_.preciseTiming.value() ? 1U : 0U};
+  // Máy đang chậm thì marker cũng tới ứng dụng chậm như Backspace.
+  timing.afterMarkerCommitWaitMs = adaptiveWait_.effectiveWaitMs(
+      static_cast<uint32_t>(advancedConfig_.afterMarkerCommitWaitMs.value()));
+  return timing;
 }
 
 void ArecaEngine::rebuildAppBackendOverridesMap() {

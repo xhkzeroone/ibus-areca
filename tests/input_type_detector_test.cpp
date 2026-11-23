@@ -20,14 +20,7 @@ struct WindowFocusTrackerTestAccess {
     {
       std::lock_guard<std::mutex> lock(tracker.focusProgramMutex_);
       tracker.focusProgram_ = program;
-      tracker.focusClass_.clear();
     }
-  }
-
-  static void setClass(WindowFocusTracker &tracker,
-                       const std::string &className) {
-    std::lock_guard<std::mutex> lock(tracker.focusProgramMutex_);
-    tracker.focusClass_ = className;
   }
 
   static void loseFocus(WindowFocusTracker &tracker, const char *sender,
@@ -111,15 +104,6 @@ int main() {
     assert(!detector.isBrowser("redisinsight"));
     assert(!detector.isBrowser("slack"));
     assert(detector.isBrowser(""));
-
-    // Chromium browser checks with null tracker
-    assert(detector.isChromiumBrowser("google-chrome"));
-    assert(detector.isChromiumBrowser("chromium"));
-    assert(detector.isChromiumBrowser("brave"));
-    assert(detector.isChromiumBrowser("microsoft-edge"));
-    assert(!detector.isChromiumBrowser("firefox"));
-    assert(!detector.isChromiumBrowser("code"));
-    assert(!detector.isChromiumBrowser(""));
   }
 
   // Case 2: Inactive/invalid tracker (SPI disabled)
@@ -153,74 +137,19 @@ int main() {
     detector.setFocusTracker(nullptr);
   }
 
-  // Chromium variants can add prefixes or suffixes to the omnibox class.
+  // Mất focus hay mất kết nối AT-SPI thì quên ngay chương trình đang focus.
   {
-    areca::im::InputContextManager manager;
-    TestInputContext edge(manager, "microsoft-edge");
-    edge.setCapabilityFlags(areca::im::CapabilityFlag::Url);
-    InputTypeDetector detector;
-    // Url is authoritative and does not depend on AT-SPI availability.
-    assert(detector.inChromiumAddressBar(edge));
-
-    edge.setCapabilityFlags(areca::im::CapabilityFlags{});
-    assert(!detector.inChromiumAddressBar(edge));
-
     WindowFocusTracker tracker;
-    detector.setFocusTracker(&tracker);
-    areca::WindowFocusTrackerTestAccess::seedFocus(tracker, ":1.53", "/omnibox",
-                                                   "msedge", false);
-    areca::WindowFocusTrackerTestAccess::setClass(tracker, "OmniboxViewViews");
-    assert(detector.inChromiumAddressBar(edge));
-    // The Url capability is not needed for a match.
-    edge.setCapabilityFlags(areca::im::CapabilityFlags{});
-    assert(detector.inChromiumAddressBar(edge));
-
-    // Page inputs must not match the current Omnibox substring rule.
-    for (const auto *className : {"control   ", ""}) {
-      areca::WindowFocusTrackerTestAccess::setClass(tracker, className);
-      assert(!detector.inChromiumAddressBar(edge));
-    }
-    for (const auto *className :
-         {"OmniboxResultView", "BraveOmniboxViewViews",
-          "OmniboxViewViews extra", "CustomOmniboxViewViewsSubclass"}) {
-      areca::WindowFocusTrackerTestAccess::setClass(tracker, className);
-      assert(detector.inChromiumAddressBar(edge));
-    }
-    // Re-entering the page immediately clears the previous verdict.
-    areca::WindowFocusTrackerTestAccess::setClass(tracker, "OmniboxViewViews");
-    assert(detector.inChromiumAddressBar(edge));
-    areca::WindowFocusTrackerTestAccess::seedFocus(
-        tracker, ":1.53", "/page-input", "msedge", false);
-    assert(!detector.inChromiumAddressBar(edge));
-
-    areca::WindowFocusTrackerTestAccess::setClass(tracker, "OmniboxViewViews");
-    // All browser identities use the existing Chromium list, without aliases.
-    for (const auto *program :
-         {"microsoft-edge-stable", "msedge", "com.microsoft.Edge.desktop",
-          "brave-browser", "brave", "google-chrome-beta", "chromium-browser"}) {
-      TestInputContext alias(manager, program);
-      assert(detector.inChromiumAddressBar(alias));
-    }
-    TestInputContext chrome(manager, "google-chrome");
-    assert(detector.inChromiumAddressBar(chrome));
-    TestInputContext editor(manager, "gnome-text-editor");
-    assert(!detector.inChromiumAddressBar(editor));
-    areca::WindowFocusTrackerTestAccess::seedFocus(tracker, ":1.54", "/omnibox",
+    areca::WindowFocusTrackerTestAccess::seedFocus(tracker, ":1.54", "/input",
                                                    "chrome", false);
-    areca::WindowFocusTrackerTestAccess::setClass(tracker, "OmniboxViewViews");
-    assert(detector.inChromiumAddressBar(chrome));
-    assert(detector.inChromiumAddressBar(edge));
+    assert(tracker.focusProgram() == "chrome");
+    areca::WindowFocusTrackerTestAccess::loseFocus(tracker, ":1.54", "/input");
+    assert(tracker.focusProgram().empty());
 
-    areca::WindowFocusTrackerTestAccess::loseFocus(tracker, ":1.54",
-                                                   "/omnibox");
-    assert(!detector.inChromiumAddressBar(chrome));
-    assert(tracker.browserFocus().className.empty());
-    areca::WindowFocusTrackerTestAccess::seedFocus(tracker, ":1.54", "/omnibox",
+    areca::WindowFocusTrackerTestAccess::seedFocus(tracker, ":1.54", "/input",
                                                    "chrome", false);
-    areca::WindowFocusTrackerTestAccess::setClass(tracker, "OmniboxViewViews");
     areca::WindowFocusTrackerTestAccess::connectionLost(tracker);
-    assert(!detector.inChromiumAddressBar(chrome));
-    assert(tracker.browserFocus().className.empty());
+    assert(tracker.focusProgram().empty());
   }
 
   // Case 5: Tracker focus must not leak to another application.

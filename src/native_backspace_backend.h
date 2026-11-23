@@ -24,6 +24,9 @@ public:
   ~NativeBackspaceBackend() override;
 
   const char *name() const override { return "native-backspace"; }
+  MarkerDelivery markerDelivery() const override {
+    return MarkerDelivery::Keys;
+  }
   ApplyStatus apply(im::InputContext &inputContext, const RewritePlan &plan,
                     RewriteDone onDone) override;
 

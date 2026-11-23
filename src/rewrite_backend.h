@@ -19,6 +19,16 @@ enum class RewriteOutcome {
   Failed,
 };
 
+// Marker đến ứng dụng qua kênh nào so với lệnh xoá của backend.
+enum class MarkerDelivery {
+  // Xoá cũng đi qua giao thức bộ gõ, cùng kênh và đúng thứ tự với commit nên
+  // xoá được ngay sau marker.
+  InputMethod,
+  // Xoá bằng phím đi qua kênh khác commit; phải chờ marker tới ứng dụng rồi
+  // mới phát phím, nếu không Backspace có thể tới trước marker.
+  Keys,
+};
+
 using RewriteDone =
     std::function<void(uint64_t transactionId, RewriteOutcome outcome)>;
 
@@ -26,6 +36,9 @@ class RewriteBackend {
 public:
   virtual ~RewriteBackend() = default;
   virtual const char *name() const = 0;
+  virtual MarkerDelivery markerDelivery() const {
+    return MarkerDelivery::InputMethod;
+  }
   virtual ApplyStatus apply(im::InputContext &inputContext,
                             const RewritePlan &plan, RewriteDone onDone) = 0;
 };

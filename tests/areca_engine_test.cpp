@@ -171,11 +171,33 @@ void testConfigRoundTrip() {
   assert(context.text == "việt");
 }
 
+// Ô URL của trình duyệt không còn đường riêng: marker "·" vào trước, rồi xoá
+// bằng Backspace như ô thường, kể cả chính marker.
+void testUrlFieldUsesMarkerAndBackspace() {
+  FakeHost host(makeConfigDir());
+  FakeContext context("google-chrome");
+  context.setCapabilityFlags(areca::im::CapabilityFlag::Url);
+  host.contexts.push_back(&context);
+  areca::ArecaEngine engine(host);
+  engine.activate(context);
+
+  typeText(engine, context, "vieet");
+  runFor(2000);
+  assert(context.text == "viêt");
+  // Phím đầu "v" được forward nguyên cho trình duyệt nên không có commit.
+  const std::vector<std::string> expected = {
+      "commit:i",  "commit:e", "commit:\xC2\xB7", "backspace",
+      "backspace", "commit:ê", "commit:t"};
+  assert(context.events == expected);
+  engine.deactivate(context);
+}
+
 } // namespace
 
 int main() {
   testTypesTelexSentence();
   testConfigRoundTrip();
+  testUrlFieldUsesMarkerAndBackspace();
   std::cout << "areca_engine_test passed\n";
   return 0;
 }

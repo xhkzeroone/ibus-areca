@@ -2,8 +2,14 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace areca {
+
+// Commit trước mỗi lần xoá chữ trong Rewrite. Không gợi ý tự hoàn thành nào
+// bắt đầu bằng ký tự này nên trình duyệt bỏ gợi ý hay vùng chọn ngay khi nó vào
+// ô, nhờ vậy mọi backend xoá như ở ô thường. Marker bị xoá cùng chữ cũ.
+inline constexpr std::string_view kRewriteMarker = "\xC2\xB7";
 
 struct BambooResult {
   std::string currentText;

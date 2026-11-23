@@ -261,12 +261,13 @@ void testSchedulerReplacement() {
   });
 
   engine.process('c', "c");
-  // Đoạn bị thay được đọc lúc tới lượt, tính theo ký tự chứ không theo byte.
+  // Đoạn bị thay được đọc lúc tới lượt, tính theo ký tự chứ không theo byte,
+  // và xoá thêm marker "·" commit ngay trước đó.
   scheduler.enqueueReplacement(context, "😀", [](areca::im::InputContext &) {
     return std::string(":cười");
   });
-  assert((backend.backspaces == std::vector<uint32_t>{5}));
-  assert((context.commits == std::vector<std::string>{"😀"}));
+  assert((backend.backspaces == std::vector<uint32_t>{6}));
+  assert((context.commits == std::vector<std::string>{"\xC2\xB7", "😀"}));
   assert(replacedSeen == ":cười");
   assert(engine.resetCount == 1);
   assert(engine.currentText().empty());
@@ -279,7 +280,7 @@ void testSchedulerReplacement() {
   scheduler.enqueueReplacement(
       context, "😀", [](areca::im::InputContext &) { return std::string(); });
   assert(backend.backspaces.size() == 1);
-  assert(context.commits.size() == 1);
+  assert(context.commits.size() == 2);
 
   runLoopFor(loop, 5000);
 
@@ -301,7 +302,7 @@ void testSchedulerReplacement() {
   done(backend.transactionId, areca::RewriteOutcome::Succeeded);
   runLoopFor(loop, 20000);
   assert(resolverCalls == 1);
-  assert(backend.backspaces.back() == 4);
+  assert(backend.backspaces.back() == 5);
   assert(context.commits.back() == "❤️");
 }
 

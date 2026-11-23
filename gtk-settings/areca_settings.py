@@ -76,8 +76,6 @@ MAIN_DEFAULTS = {
     "MacroBypassModifier": "Shift",
     "BackspaceRecovery": True,
     "RestoreSurroundingText": False,
-    "ShiftSelectFallbackForBrowser": False,
-    "UseBackspaceForUrl": True,
     "DisableVietnameseInTerminal": False,
     "ShowTrayIcon": False,
     "Debug": False,
@@ -98,6 +96,7 @@ ADVANCED_DEFAULTS = {
     "XTestBackspaceDelayMs": 1,
     "AfterXTestBackspaceWaitMs": 10,
     "PostCommitDelayMs": 20,
+    "AfterMarkerCommitWaitMs": 10,
     "PreciseTiming": True,
     "UseSurroundingV2InsteadOfSurroundingV1": False,
     "UseUinputInsteadOfForwardKey": True,
@@ -906,8 +905,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
             ("Gợi ý emoji khi gõ :từ", "EmojiSuggestion", "Gõ :cười, :like, :haha... rồi chọn bằng ↑ ↓ và Enter hoặc Tab."),
             ("Bật khôi phục chính tả khi nhấn Backspace", "BackspaceRecovery", "Khôi phục từ vừa sửa khi xoá ngược."),
             ("Cho phép sửa từ đã commit", "RestoreSurroundingText", "Sửa từ vừa gõ dựa trên văn bản xung quanh con trỏ."),
-            ("Shift+Left fallback cho trình duyệt", "ShiftSelectFallbackForBrowser", "Dùng khi trình duyệt không hỗ trợ surrounding text."),
-            ("Xử lý riêng ô URL và thanh địa chỉ", "UseBackspaceForUrl", "Chọn backend tương thích cho ô địa chỉ."),
             ("Tắt tiếng Việt trong terminal", "DisableVietnameseInTerminal", "Chuyển tiếp nguyên phím khi đang ở terminal, giống ô mật khẩu."),
         ]:
             self._switch(behavior, title, key, description)
@@ -1296,6 +1293,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
                 self._spin(group, label, key, maximum)
         general = self._section(content, "Chung")
         self._spin(general, "Delay sau mỗi commit (ms)", "PostCommitDelayMs", 5000)
+        self._spin(general, "Chờ sau marker trước khi xoá bằng phím (ms)", "AfterMarkerCommitWaitMs", 5000, "Areca gõ \"·\" trước mỗi lần sửa chữ; Backspace và Shift+Left chờ chừng này để \"·\" tới ứng dụng trước.")
         compat = self._section(content, "Tương thích")
         for title, key in [
             ("Dùng timer độ chính xác cao", "PreciseTiming"),

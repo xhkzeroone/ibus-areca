@@ -37,7 +37,7 @@ ibus-areca là engine IBus viết bằng C++20. Engine ghép dấu là Bamboo vi
 1. `ArecaEngine::keyEvent` lọc ô mật khẩu, terminal, menu chọn backend, phím phát lại từ uinput.
 2. `RewriteModeHandler::handleKeyEvent` quyết định forward, reset, restore surrounding hoặc đưa vào `InputScheduler`.
 3. `InputScheduler::processNext` gọi Bamboo, nhận `BambooResult`.
-4. `deleteCount == 0` thì `commitString` ngay. Ngược lại tạo `RewritePlan` và gọi `RewriteBackend::apply`.
+4. `deleteCount == 0` thì `commitString` ngay. Ngược lại chọn backend, commit marker `kRewriteMarker` ("·"), tạo `RewritePlan` xoá `deleteCount + 1` và gọi `RewriteBackend::apply`: ngay nếu `markerDelivery()` là `InputMethod`, sau `afterMarkerCommitWaitMs` ở pha post nếu là `Keys`. Commit observer nhận `deleteCount`, không nhận marker.
 5. Backend trả `Completed`, `Pending` hoặc `Failed`. `Pending` phải gọi `RewriteDone` đúng một lần với đúng `transactionId`.
 6. Scheduler chờ post-commit barrier rồi mới lấy phím kế tiếp. Backend `Failed` làm scheduler `stalled` để không phá thứ tự phím.
 
@@ -66,6 +66,7 @@ Callback bất đồng bộ giữ `inputContext.watch()` và kiểm tra `.get()`
 
 ### Rewrite backend mới
 - Kế thừa `RewriteBackend`, implement `name()` và `apply()`.
+- Xoá bằng phím (khác kênh với commit) thì override `markerDelivery()` trả `MarkerDelivery::Keys` để scheduler chờ marker "·" tới ứng dụng trước. Backend không tự commit marker; `plan.backspaceCount` đã gồm nó.
 - `apply()` trả `Failed` ngay nếu đang có transaction hoặc `transactionId == 0`.
 - Lưu `transactionId_`, `onDone_`, `inputContext_` trước khi gây tác dụng phụ vì client có thể gọi lại đồng bộ.
 - Mọi timer lưu trong `std::unique_ptr<im::EventSourceTime>`, gọi `setOneShot()`, trong callback `std::move` timer ra biến cục bộ trước khi chạy tiếp.

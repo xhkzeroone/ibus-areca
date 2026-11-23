@@ -25,6 +25,9 @@ public:
   ~NativeShiftSelectBackend() override;
 
   const char *name() const override { return "native-shift-select"; }
+  MarkerDelivery markerDelivery() const override {
+    return MarkerDelivery::Keys;
+  }
   ApplyStatus apply(im::InputContext &inputContext, const RewritePlan &plan,
                     RewriteDone onDone) override;
 

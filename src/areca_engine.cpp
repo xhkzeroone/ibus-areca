@@ -473,8 +473,8 @@ void ArecaEngine::keyEvent(im::KeyEvent &event) {
     return;
   }
   if (!event.isRelease()) {
-    // Resolve program một lần để nhận diện address bar dùng cùng verdict trong
-    // toàn bộ lượt xử lý phím.
+    // Resolve program một lần để mọi bước trong lượt xử lý phím nhìn cùng một
+    // ứng dụng.
     auto *state = inputContext->propertyFor(&rewriteStateFactory_);
     resolveProgram(*inputContext, state);
 

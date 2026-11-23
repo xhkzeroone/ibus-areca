@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <functional>
@@ -230,6 +231,60 @@ void testProbeFailureFallbackToBackspace() {
   assert(probeFailedCalled);
   assert(doneCalled);
   assert(inputContext.committedText == "trieu");
+}
+
+// Scheduler đã commit marker "·" và ghi nó vào cache trước khi gọi backend:
+// probe phải tính cả marker trong N+1 ký tự cần xoá, còn fallback chỉ xoá rồi
+// commit chữ mới, không commit marker lần nữa.
+void testProbeCountsRewriteMarker() {
+  {
+    areca::im::EventLoop eventLoop;
+    areca::im::InputContextManager manager;
+    std::vector<std::string> events;
+    DummyInputContext inputContext(manager, events);
+    inputContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
+    inputContext.surroundingText().setText("vie\xC2\xB7", 4, 4);
+    FakeBackspaceBackend fallback(events);
+    bool succeeded = false;
+    areca::SurroundingTextBackend backend(
+        eventLoop, []() { return false; },
+        [&](areca::im::InputContext &) { succeeded = true; },
+        [](areca::im::InputContext &) {},
+        [&](areca::im::InputContext &) -> areca::RewriteBackend * {
+          return &fallback;
+        });
+    assert(backend.apply(inputContext, makePlan(201, 2, "ê", true),
+                         [&](uint64_t, areca::RewriteOutcome) {
+                           eventLoop.exit();
+                         }) == areca::ApplyStatus::Pending);
+    inputContext.surroundingText().setText("vi", 2, 2);
+    backend.notifySurroundingTextUpdated(inputContext);
+    eventLoop.exec();
+    assert(succeeded);
+    assert(inputContext.committedText == "ê");
+    assert(inputContext.surroundingText().text() == "viê");
+  }
+  {
+    areca::im::EventLoop eventLoop;
+    areca::im::InputContextManager manager;
+    std::vector<std::string> events;
+    DummyInputContext inputContext(manager, events, "code");
+    inputContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
+    inputContext.surroundingText().setText("vie\xC2\xB7", 4, 4);
+    FakeBackspaceBackend fallback(events);
+    areca::SurroundingTextBackend backend(
+        eventLoop, []() { return false; }, [](areca::im::InputContext &) {},
+        [](areca::im::InputContext &) {},
+        [&](areca::im::InputContext &) -> areca::RewriteBackend * {
+          return &fallback;
+        });
+    backend.apply(inputContext, makePlan(202, 2, "ê", true),
+                  [&](uint64_t, areca::RewriteOutcome) { eventLoop.exit(); });
+    eventLoop.exec();
+    assert(std::find(events.begin(), events.end(),
+                     "backspaceApply:tx=202:bs=2:commit=ê") != events.end());
+    assert(inputContext.committedText == "ê");
+  }
 }
 
 // A stale update must not be rescued by polling a newer cached snapshot at the
@@ -582,6 +637,7 @@ int main() {
   testRetryOnlyOnSecondWord();
   testProbeFailureFallbackToShiftSelect();
   testProbeFailureFallbackToBackspace();
+  testProbeCountsRewriteMarker();
   testSingleWrongUpdateFallsBack();
   testProbeSuccessViaEvent();
   testProbeSuccessViaSynchronousEvent();

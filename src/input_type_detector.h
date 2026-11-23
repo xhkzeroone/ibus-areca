@@ -18,11 +18,7 @@ public:
 
   bool isTerminal(const std::string &program) const;
   bool isBrowser(const std::string &program) const;
-  bool isChromiumBrowser(const std::string &program) const;
   bool canForwardBackspaces(const im::InputContext &inputContext,
-                            const std::string &program = "") const;
-
-  bool inChromiumAddressBar(const im::InputContext &inputContext,
                             const std::string &program = "") const;
 
 private:

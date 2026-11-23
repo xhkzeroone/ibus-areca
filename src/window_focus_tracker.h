@@ -32,19 +32,6 @@ public:
 
   bool isValid() const { return valid_.load(std::memory_order_relaxed); }
 
-  struct BrowserFocus {
-    std::string program;
-    std::string className;
-  };
-
-  BrowserFocus browserFocus() const {
-    std::lock_guard<std::mutex> lock(focusProgramMutex_);
-    if (!x11Program_.empty()) {
-      return {x11Program_, {}};
-    }
-    return {focusProgram_, focusClass_};
-  }
-
   bool isTerminalFocused() const {
     std::lock_guard<std::mutex> lock(focusProgramMutex_);
     return x11Program_.empty() &&
@@ -105,7 +92,6 @@ private:
 
   mutable std::mutex focusProgramMutex_;
   std::string focusProgram_;
-  std::string focusClass_;
   // Chỉ có giá trị khi AT-SPI không báo focus cho cửa sổ X11 hiện tại.
   std::string x11Program_;
   // Thuộc thread theo dõi.

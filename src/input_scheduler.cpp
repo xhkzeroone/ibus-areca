@@ -17,7 +17,8 @@ InputScheduler::InputScheduler(im::EventLoop &eventLoop,
     : eventLoop_(eventLoop), engineResolver_(std::move(engineResolver)),
       timingProvider_(std::move(timingProvider)),
       debugProvider_(std::move(debugProvider)),
-      rewriteBackendSelector_(std::move(rewriteBackendSelector)) {}
+      rewriteBackendSelector_(std::move(rewriteBackendSelector)),
+      markerWaitPost_(eventLoop) {}
 
 void InputScheduler::enqueue(im::InputContext &inputContext, uint32_t codepoint,
                              std::string utf8Text, bool suppressMacro) {
@@ -280,7 +281,8 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
     return;
   }
   auto &backend = *selection.backend;
-  plan.backspaceCount = result.deleteCount + selection.additionalBackspaces;
+  // Xoá thêm marker "·" sắp commit cùng với chữ cũ.
+  plan.backspaceCount = result.deleteCount + 1;
   plan.probeSurrounding = selection.probeSurrounding;
   if (selection.surroundingProbeTimeoutMs > 0) {
     plan.surroundingProbeTimeoutMs = selection.surroundingProbeTimeoutMs;
@@ -289,7 +291,6 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
     ARECA_INFO() << "areca: rewrite select backend=" << backend.name()
                  << " tx=" << plan.transactionId
                  << " bamboo_delete=" << result.deleteCount
-                 << " additional_backspaces=" << selection.additionalBackspaces
                  << " probe_timeout_ms=" << plan.surroundingProbeTimeoutMs
                  << " plan_backspaces=" << plan.backspaceCount;
   }
@@ -298,6 +299,66 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   pendingCommitContext_ = inputContext.watch();
   pendingCommitDeleteCount_ = result.deleteCount;
   pendingCommitText_ = result.commitText;
+
+  // Marker không báo commit observer: xét cả lượt, chữ trong ô vẫn là xoá
+  // deleteCount ký tự rồi chèn chữ mới. Cache surrounding phải có marker để
+  // lệnh xoá N+1 ký tự tính đúng vị trí.
+  const std::string marker(kRewriteMarker);
+  inputContext.commitString(marker);
+  updateSurroundingCacheAfterCommit(inputContext, marker);
+  if (backend.markerDelivery() == MarkerDelivery::InputMethod) {
+    startRewrite(inputContext, backend, plan);
+    return;
+  }
+
+  const uint32_t waitMs = activeTiming_.afterMarkerCommitWaitMs;
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: rewrite marker tx=" << plan.transactionId
+                 << " wait_ms=" << waitMs << " backend=" << backend.name();
+  }
+  auto inputContextWatch = inputContext.watch();
+  auto *backendPtr = &backend;
+  // Phát phím ở pha post để event đang chờ, như surrounding update của marker,
+  // được dispatch trước.
+  auto start = [this, inputContextWatch, backendPtr, plan]() {
+    auto *ic = inputContextWatch.get();
+    if (!ic) {
+      if (debugProvider_()) {
+        ARECA_INFO() << "areca: rewrite marker context lost tx="
+                     << plan.transactionId;
+      }
+      activeTransactionId_ = 0;
+      pendingCommitContext_.unwatch();
+      pendingCommitDeleteCount_ = 0;
+      pendingCommitText_.clear();
+      finishKey();
+      return;
+    }
+    startRewrite(*ic, *backendPtr, plan);
+  };
+  if (waitMs == 0) {
+    markerWaitPost_.schedule(start);
+    return;
+  }
+  markerWaitTimer_ = eventLoop_.addTimeEvent(
+      CLOCK_MONOTONIC,
+      im::now(CLOCK_MONOTONIC) + static_cast<uint64_t>(waitMs) * 1000,
+      activeTiming_.timerAccuracyUsec,
+      [this, start](im::EventSourceTime *, uint64_t) {
+        auto completedTimer = std::move(markerWaitTimer_);
+        markerWaitPost_.schedule(start);
+        return false;
+      });
+  if (!markerWaitTimer_) {
+    markerWaitPost_.schedule(start);
+    return;
+  }
+  markerWaitTimer_->setOneShot();
+}
+
+void InputScheduler::startRewrite(im::InputContext &inputContext,
+                                  RewriteBackend &backend,
+                                  const RewritePlan &plan) {
   const auto status =
       backend.apply(inputContext, plan,
                     [this](uint64_t transactionId, RewriteOutcome outcome) {

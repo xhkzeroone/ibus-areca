@@ -49,19 +49,6 @@ bool InputTypeDetector::isBrowser(const std::string &program) const {
   return true;
 }
 
-bool InputTypeDetector::isChromiumBrowser(const std::string &program) const {
-  if (!program.empty()) {
-    return areca::isChromiumBrowser(program);
-  }
-  if (tracker_ && tracker_->isValid()) {
-    const std::string tracked = tracker_->focusProgram();
-    if (!tracked.empty()) {
-      return areca::isChromiumBrowser(tracked);
-    }
-  }
-  return false;
-}
-
 bool InputTypeDetector::isTerminal(const std::string &program) const {
   if (isTerminalProgram(program)) {
     return true;
@@ -85,23 +72,6 @@ bool InputTypeDetector::canForwardBackspaces(
   // Ứng dụng SDL thường tự vẽ và tự xử lý phím, không nhận Backspace mà IBus
   // forward, nên phải xoá bằng phím phần cứng.
   return !isSdlProgram(prog);
-}
-
-bool InputTypeDetector::inChromiumAddressBar(
-    const im::InputContext &inputContext, const std::string &program) const {
-  // Url is authoritative. AT-SPI only fills the gap for Chromium frontends
-  // that do not expose CapabilityFlag::Url.
-  if (inputContext.capabilityFlags().test(im::CapabilityFlag::Url)) {
-    return true;
-  }
-  if (!tracker_ || !tracker_->isValid())
-    return false;
-  const auto focus = tracker_->browserFocus();
-  std::string prog = program.empty() ? inputContext.program() : program;
-  if (prog.empty())
-    prog = focus.program;
-  return isChromiumBrowser(prog) && isChromiumBrowser(focus.program) &&
-         focus.className.find("Omnibox") != std::string::npos;
 }
 
 } // namespace areca

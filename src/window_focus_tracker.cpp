@@ -77,7 +77,6 @@ void WindowFocusTracker::clearFocus() {
   {
     std::lock_guard<std::mutex> lock(focusProgramMutex_);
     focusProgram_.clear();
-    focusClass_.clear();
   }
 }
 
@@ -323,7 +322,6 @@ void WindowFocusTracker::processFocusEvent(DBusConnection *bus,
   {
     std::lock_guard<std::mutex> lock(focusProgramMutex_);
     focusProgram_ = info.program;
-    focusClass_ = info.className;
   }
 }
 

@@ -8,6 +8,7 @@
 #include "im/im.h"
 
 #include "bamboo_engine_adapter.h"
+#include "event_loop_post.h"
 #include "key_queue.h"
 #include "rewrite_backend.h"
 
@@ -30,11 +31,13 @@ struct SchedulerTiming {
   uint32_t afterNativeBackspaceWaitMs = 10;
   uint32_t postCommitDelayMs = 20;
   uint64_t timerAccuracyUsec = 1;
+  // Chờ marker tới ứng dụng trước khi backend phát phím xoá, đã gồm phần
+  // AdaptiveWait cộng thêm khi máy chậm.
+  uint32_t afterMarkerCommitWaitMs = 10;
 };
 
 struct RewriteBackendSelection {
   RewriteBackend *backend = nullptr;
-  uint32_t additionalBackspaces = 0;
   bool probeSurrounding = false;
   // 0 giữ timing chung. Probe tự động đặt 150 ms cho lần đầu và 80 ms cho lần
   // retry ở từ kế tiếp.
@@ -92,6 +95,8 @@ private:
   void processNext();
   void applyResult(im::InputContext &inputContext, VietnameseEngine &engine,
                    const BambooResult &result, const std::string &rawText);
+  void startRewrite(im::InputContext &inputContext, RewriteBackend &backend,
+                    const RewritePlan &plan);
   void finishKey();
   void finishKeyAfterDelay();
   void finishKeyAfterCommit();
@@ -111,6 +116,8 @@ private:
   std::string pendingCommitText_;
   KeyQueue queue_;
   std::unique_ptr<im::EventSourceTime> postCommitTimer_;
+  std::unique_ptr<im::EventSourceTime> markerWaitTimer_;
+  EventLoopPostTask markerWaitPost_;
   SchedulerTiming activeTiming_;
   uint64_t nextSequence_ = 1;
   uint64_t nextTransactionId_ = 1;

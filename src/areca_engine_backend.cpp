@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 
-#include "browser_autocomplete.h"
 #include "im/im.h"
 #include "program_compatibility.h"
 #include "surrounding_probe_match.h"
@@ -176,12 +175,6 @@ RewriteBackend *
 ArecaEngine::resolveSurroundingFallbackBackend(im::InputContext &inputContext) {
   const std::string prog = resolveProgram(
       inputContext, inputContext.propertyFor(&rewriteStateFactory_));
-  if (config_.shiftSelectFallbackForBrowser.value() &&
-      inputTypeDetector_.isBrowser(prog)) {
-    if (auto *shiftBackend = resolvePreferredShiftSelectBackend()) {
-      return shiftBackend;
-    }
-  }
   const bool isTerminal = inputTypeDetector_.isTerminal(prog);
   const bool canForward =
       inputTypeDetector_.canForwardBackspaces(inputContext, prog);
@@ -225,8 +218,6 @@ std::string ArecaEngine::describeAutoBackend(const std::string &appName) {
     switch (it->second) {
     case AppBackendMode::SurroundingText:
       return "Tự động (Surrounding)";
-    case AppBackendMode::ShiftSelect:
-      return "Tự động (Shift select)";
     case AppBackendMode::Backspace:
       return "Tự động (Backspace)";
     case AppBackendMode::Preedit:
@@ -317,127 +308,11 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
     return {backend};
   }
 
-  const auto capabilities = inputContext.capabilityFlags();
-  const auto &surrounding = inputContext.surroundingText();
-  const bool hasSurrounding =
-      capabilities.test(im::CapabilityFlag::SurroundingText) &&
-      surrounding.isValid();
-  // Bắt đầu: Nhận diện thanh địa chỉ Chromium khi SurroundingText không khả
-  // dụng hoặc không hợp lệ
-  const bool inAddressBar =
-      !hasSurrounding &&
-      inputTypeDetector_.inChromiumAddressBar(inputContext, program);
-  // Kết thúc: Nhận diện thanh địa chỉ Chromium khi SurroundingText không khả
-  // dụng hoặc không hợp lệ
-  const bool isUrl = capabilities.test(im::CapabilityFlag::Url) || inAddressBar;
-  const bool forceUrlBackspace = shouldForceBackspaceForUrl(
-      config_.useBackspaceForUrl.value(), capabilities, inAddressBar);
+  // Gợi ý tự hoàn thành và vùng chọn của trình duyệt đã bị marker "·" mà
+  // scheduler commit trước khi xoá thay mất, nên ở đây không còn nhánh riêng
+  // cho thanh địa chỉ hay ô URL.
   const auto decision =
       evaluateReliability(inputContext, result.currentText, program);
-  const bool hasActiveSelection =
-      surrounding.isValid() && surrounding.cursor() != surrounding.anchor();
-  const bool selectionMatchesCurrentText =
-      hasActiveSelection &&
-      isSelectionImmediatelyAfterText(surrounding.text(), surrounding.cursor(),
-                                      surrounding.anchor(), result.currentText);
-  const bool collapsedFirefoxAutocomplete =
-      surrounding.isValid() &&
-      isCollapsedFirefoxAutocomplete(program, surrounding.text(),
-                                     surrounding.cursor(), surrounding.anchor(),
-                                     result.currentText);
-
-  // Chỉ xử lý autocomplete đặc biệt khi frontend cung cấp surrounding text
-  // đủ để quan sát selection. Không đoán ký tự autocomplete khi surrounding
-  // không khả dụng.
-  if (decision.browserAutocomplete || collapsedFirefoxAutocomplete ||
-      hasActiveSelection) {
-    if (isUrl) {
-      auto *shiftBackend = resolvePreferredShiftSelectBackend();
-      if (shiftBackend) {
-        if (!program.empty()) {
-          lastAutoBackendByApp_[program] = AppBackendMode::ShiftSelect;
-        }
-        if (debugEnabled()) {
-          ARECA_INFO() << "areca: autocomplete selected shift-select backend="
-                       << shiftBackend->name() << " collapsed_autocomplete="
-                       << collapsedFirefoxAutocomplete
-                       << " active_selection=" << hasActiveSelection
-                       << " bamboo_delete=" << result.deleteCount
-                       << " program=" << program;
-        }
-        return {shiftBackend};
-      }
-    }
-
-    uint32_t additional = 0;
-    if (selectionMatchesCurrentText || decision.browserAutocomplete ||
-        collapsedFirefoxAutocomplete) {
-      additional = 1;
-    }
-    RewriteBackend *backend = resolvePreferredBackspaceBackend(preferHardware);
-    if (!program.empty()) {
-      lastAutoBackendByApp_[program] = AppBackendMode::Backspace;
-    }
-    if (debugEnabled()) {
-      ARECA_INFO() << "areca: browser autocomplete or address bar strategy="
-                   << backend->name() << " is_url=" << isUrl
-                   << " in_address_bar=" << inAddressBar
-                   << " collapsed_autocomplete=" << collapsedFirefoxAutocomplete
-                   << " active_selection=" << hasActiveSelection
-                   << " selection_matches_current="
-                   << selectionMatchesCurrentText
-                   << " additional_backspaces=" << additional
-                   << " bamboo_delete=" << result.deleteCount;
-    }
-    return {backend, additional};
-  }
-
-  // URL/address bar không có surrounding dùng Shift+Select để thay đúng phần
-  // Bamboo yêu cầu. Nếu backend này không khả dụng mới lùi về Backspace.
-  if (shouldUseShiftSelectForUrl(isUrl, hasSurrounding,
-                                 inputTypeDetector_.isBrowser(program))) {
-    if (auto *shiftBackend = resolvePreferredShiftSelectBackend()) {
-      if (!program.empty()) {
-        lastAutoBackendByApp_[program] = AppBackendMode::ShiftSelect;
-      }
-      if (debugEnabled()) {
-        ARECA_INFO() << "areca: url without surrounding selected shift-select "
-                        "backend="
-                     << shiftBackend->name() << " is_url=" << isUrl
-                     << " in_address_bar=" << inAddressBar
-                     << " program=" << program;
-      }
-      return {shiftBackend};
-    }
-  }
-
-  // Khi cấu hình buộc xử lý URL, ưu tiên Shift+Select kể cả khi surrounding
-  // khả dụng. Chỉ lùi về Backspace nếu không có Shift+Select backend.
-  if (forceUrlBackspace) {
-    if (auto *shiftBackend = resolvePreferredShiftSelectBackend()) {
-      if (!program.empty()) {
-        lastAutoBackendByApp_[program] = AppBackendMode::ShiftSelect;
-      }
-      if (debugEnabled()) {
-        ARECA_INFO() << "areca: url selected shift-select backend="
-                     << shiftBackend->name()
-                     << " has_surrounding=" << hasSurrounding
-                     << " program=" << program;
-      }
-      return {shiftBackend};
-    }
-
-    RewriteBackend *backend = resolvePreferredBackspaceBackend(preferHardware);
-    if (!program.empty()) {
-      lastAutoBackendByApp_[program] = AppBackendMode::Backspace;
-    }
-    if (debugEnabled()) {
-      ARECA_INFO() << "areca: url shift-select unavailable, fallback backend="
-                   << backend->name() << " has_surrounding=" << hasSurrounding
-                   << " program=" << program;
-    }
-    return {backend};
-  }
 
   if (!program.empty()) {
     auto it = appBackendOverridesMap_.find(program);
@@ -459,19 +334,7 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
                          << surBackend->name() << " program=" << program
                          << " probe_timeout_ms=" << probeTimeoutMs;
           }
-          return {surBackend, 0, backendVerdict_.probePending, probeTimeoutMs};
-        }
-        if (config_.shiftSelectFallbackForBrowser.value() && !isTerminal &&
-            inputTypeDetector_.isBrowser(program)) {
-          if (auto *shiftBackend = resolvePreferredShiftSelectBackend()) {
-            if (debugEnabled()) {
-              ARECA_INFO() << "areca: browser surrounding disabled or failed, "
-                              "fallback to shift-select"
-                           << " program=" << program
-                           << " backend=" << shiftBackend->name();
-            }
-            return {shiftBackend};
-          }
+          return {surBackend, backendVerdict_.probePending, probeTimeoutMs};
         }
         return {resolvePreferredBackspaceBackend(preferHardware)};
       case AppBackendMode::ShiftSelect:
@@ -523,23 +386,7 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
                    << " probe=" << backendVerdict_.probePending
                    << " probe_timeout_ms=" << probeTimeoutMs;
     }
-    return {surBackend, 0, backendVerdict_.probePending, probeTimeoutMs};
-  }
-
-  if (config_.shiftSelectFallbackForBrowser.value() && !isTerminal &&
-      inputTypeDetector_.isBrowser(program)) {
-    if (auto *shiftBackend = resolvePreferredShiftSelectBackend()) {
-      if (!program.empty()) {
-        lastAutoBackendByApp_[program] = AppBackendMode::ShiftSelect;
-      }
-      if (debugEnabled()) {
-        ARECA_INFO() << "areca: browser surrounding disabled or failed, "
-                        "fallback to shift-select"
-                     << " program=" << program
-                     << " backend=" << shiftBackend->name();
-      }
-      return {shiftBackend};
-    }
+    return {surBackend, backendVerdict_.probePending, probeTimeoutMs};
   }
 
   if (!program.empty()) {
@@ -556,22 +403,17 @@ ArecaEngine::evaluateReliability(im::InputContext &inputContext,
   const std::string &programName =
       !program.empty() ? program : inputContext.program();
 
-  const bool browserAutocomplete =
-      inputTypeDetector_.isBrowser(programName) &&
-      isBrowserAutocomplete(surrounding.text(), surrounding.cursor(),
-                            surrounding.anchor(), shownText);
-
   // Bắt đầu: Probe lại đúng một lần khi bước sang từ kế tiếp
   auto *state = inputContext.propertyFor(&rewriteStateFactory_);
-  if (!browserAutocomplete && state &&
-      backendVerdict_.retryForWord(state->wordSerial) && debugEnabled()) {
+  if (state && backendVerdict_.retryForWord(state->wordSerial) &&
+      debugEnabled()) {
     ARECA_INFO() << "areca: surrounding probe retry armed"
                  << " attempt=" << (backendVerdict_.probeAttempts + 1)
                  << " word=" << state->wordSerial << " program=" << programName;
   }
   // Kết thúc: Probe lại đúng một lần khi bước sang từ kế tiếp
 
-  if (!backendVerdict_.known && !browserAutocomplete) {
+  if (!backendVerdict_.known) {
     backendVerdict_.reliable = !isInvalidSurrounding(surrounding);
     backendVerdict_.probePending = backendVerdict_.reliable;
     if (debugEnabled()) {
@@ -609,8 +451,7 @@ ArecaEngine::evaluateReliability(im::InputContext &inputContext,
   // nhầm update cũ là xác nhận xoá. Khi đó coi probe thất bại: dùng
   // Backspace/Shift+Left và thử lại ở từ kế tiếp.
   const bool staleDuringProbe =
-      !browserAutocomplete && backendVerdict_.probePending &&
-      backendVerdict_.reliable &&
+      backendVerdict_.probePending && backendVerdict_.reliable &&
       surrounding.cursor() == surrounding.anchor() &&
       !surroundingSnapshotEndsWith(surrounding.isValid(), surrounding.text(),
                                    surrounding.cursor(), surrounding.anchor(),
@@ -634,15 +475,12 @@ ArecaEngine::evaluateReliability(im::InputContext &inputContext,
     ARECA_INFO() << "areca: reliability cached known=" << backendVerdict_.known
                  << " reliable=" << backendVerdict_.reliable
                  << " force_forward=" << backendVerdict_.forceForwardBackspace
-                 << " browser_autocomplete=" << browserAutocomplete
                  << " program=" << programName;
   }
 
   ReliabilityDecision decision;
-  decision.browserAutocomplete = browserAutocomplete;
   decision.useSurrounding = backendVerdict_.known && backendVerdict_.reliable &&
-                            !backendVerdict_.forceForwardBackspace &&
-                            !browserAutocomplete;
+                            !backendVerdict_.forceForwardBackspace;
   return decision;
 }
 

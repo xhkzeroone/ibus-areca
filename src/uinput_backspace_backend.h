@@ -24,6 +24,9 @@ public:
   ~UinputBackspaceBackend() override;
 
   const char *name() const override { return "uinput-backspace"; }
+  MarkerDelivery markerDelivery() const override {
+    return MarkerDelivery::Keys;
+  }
   ApplyStatus apply(im::InputContext &inputContext, const RewritePlan &plan,
                     RewriteDone onDone) override;
 

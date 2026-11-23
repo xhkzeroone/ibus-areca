@@ -52,18 +52,6 @@ inline bool isMacroBypassSpace(const im::Key &key,
   return false;
 }
 
-inline bool shouldForceBackspaceForUrl(bool enabled,
-                                       const im::CapabilityFlags &capabilities,
-                                       bool inAddressBar = false) {
-  return enabled &&
-         (capabilities.test(im::CapabilityFlag::Url) || inAddressBar);
-}
-
-inline bool shouldUseShiftSelectForUrl(bool isUrl, bool hasSurrounding,
-                                       bool isBrowser) {
-  return isUrl && !hasSurrounding && isBrowser;
-}
-
 struct StringListAnnotation : public im::EnumAnnotation {
   void setList(std::vector<std::string> list) { list_ = std::move(list); }
 
@@ -225,6 +213,10 @@ ARECA_CONFIGURATION(
     im::Option<int, im::IntConstrain> postCommitDelayMs{
         this, "PostCommitDelayMs", N_("Delay sau mỗi commit (ms)"), 20,
         im::IntConstrain(0, 5000)};
+    im::Option<int, im::IntConstrain> afterMarkerCommitWaitMs{
+        this, "AfterMarkerCommitWaitMs",
+        N_("Chờ sau marker trước khi xoá bằng phím (ms)"), 10,
+        im::IntConstrain(0, 5000)};
     im::Option<bool> preciseTiming{this, "PreciseTiming",
                                    N_("Dùng timer độ chính xác cao"), true};
     im::Option<bool> useSurroundingV2InsteadOfSurroundingV1{
@@ -306,14 +298,6 @@ ARECA_CONFIGURATION(
         N_("Khôi phục lỗi chính tả khi nhấn Backspace"), true};
     im::Option<bool> restoreSurroundingText{
         this, "RestoreSurroundingText", N_("Cho phép sửa từ đã commit"), false};
-    im::Option<bool> shiftSelectFallbackForBrowser{
-        this, "ShiftSelectFallbackForBrowser",
-        N_("Dùng Shift+Left làm fallback khi trình duyệt không hỗ trợ "
-           "surrounding text"),
-        false};
-    im::Option<bool> useBackspaceForUrl{
-        this, "UseBackspaceForUrl", N_("Xử lý riêng ô URL và thanh địa chỉ"),
-        true};
     im::Option<bool> disableVietnameseInTerminal{
         this, "DisableVietnameseInTerminal",
         N_("Tắt tiếng Việt trong terminal"), false};

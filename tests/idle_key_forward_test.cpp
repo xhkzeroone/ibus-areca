@@ -156,7 +156,9 @@ int main() {
   // Rewrite bất đồng bộ chỉ được báo khi backend xác nhận xong.
   assert(observed.size() > observedBeforeRewrite);
   assert(observed[observedBeforeRewrite] == "1:r");
-  assert(inputContext.events == std::vector<std::string>{"commit:a"});
+  // Marker "·" vào ô trước khi xoá, rồi mới tới phím xếp hàng sau.
+  assert((inputContext.events ==
+          std::vector<std::string>{"commit:\xC2\xB7", "commit:a"}));
 
   // Một phím được forward trực tiếp vẫn phải giữ single-flight barrier. Phím
   // kế tiếp đến sớm nằm trong queue và chỉ được commit sau đủ 20 ms.

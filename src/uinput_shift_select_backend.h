@@ -27,6 +27,9 @@ public:
   ~UinputShiftSelectBackend() override;
 
   const char *name() const override { return "uinput-shift-select"; }
+  MarkerDelivery markerDelivery() const override {
+    return MarkerDelivery::Keys;
+  }
   ApplyStatus apply(im::InputContext &inputContext, const RewritePlan &plan,
                     RewriteDone onDone) override;
 
