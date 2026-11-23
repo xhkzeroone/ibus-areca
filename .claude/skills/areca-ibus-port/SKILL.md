@@ -117,7 +117,7 @@ Lưu ý khi port scheduler: IBus đòi `process-key-event` trả về ngay. Như
 
 ## Cấu hình người dùng cần giữ
 
-`areca.conf` (khoá ini, mặc định): `BambooInputMethod` (Telex 2), `OutputCharset` (Unicode), `SpellcheckMode` (khôi phục ngay khi gõ), `ModernStyle` (true), `EnableMacro` (true), `CapitalizeMacro` (true), `RevertMacroOnBackspace` (true), `MacroBypassModifier` (Shift), `AutoCapitalizeAfterPunctuation` (false), `BackspaceRecovery` (true), `RestoreSurroundingText` (false), `DisableVietnameseInTerminal` (false), `Debug` (false). `areca-advanced.conf` giữ timing từng backend, `AfterMarkerCommitWaitMs` (10) và các lựa chọn uinput/Native, mouse tracking, phím đầu. Định nghĩa đầy đủ trong `src/areca_config.h`.
+`areca.conf` (khoá ini, mặc định): `BambooInputMethod` (Telex 2), `OutputCharset` (Unicode), `SpellcheckMode` (khôi phục ngay khi gõ), `ModernStyle` (true), `EnableMacro` (true), `CapitalizeMacro` (true), `RevertMacroOnBackspace` (true), `MacroBypassModifier` (Shift), `AutoCapitalizeAfterPunctuation` (false), `BackspaceRecovery` (true), `RestoreSurroundingText` (false), `DisableVietnameseInTerminal` (false), `Debug` (false). `areca-advanced.conf` giữ timing từng backend, `AfterMarkerCommitWaitMs` (10, ẩn khỏi app cài đặt, chỉ sửa tay) và các lựa chọn uinput/Native, mouse tracking, phím đầu. Định nghĩa đầy đủ trong `src/areca_config.h`.
 
 ## Kiểm thử
 

@@ -96,7 +96,6 @@ ADVANCED_DEFAULTS = {
     "XTestBackspaceDelayMs": 1,
     "AfterXTestBackspaceWaitMs": 10,
     "PostCommitDelayMs": 20,
-    "AfterMarkerCommitWaitMs": 10,
     "PreciseTiming": True,
     "UseSurroundingV2InsteadOfSurroundingV1": False,
     "UseUinputInsteadOfForwardKey": True,
@@ -1293,7 +1292,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
                 self._spin(group, label, key, maximum)
         general = self._section(content, "Chung")
         self._spin(general, "Delay sau mỗi commit (ms)", "PostCommitDelayMs", 5000)
-        self._spin(general, "Chờ sau marker trước khi xoá bằng phím (ms)", "AfterMarkerCommitWaitMs", 5000, "Areca gõ \"·\" trước mỗi lần sửa chữ; Backspace và Shift+Left chờ chừng này để \"·\" tới ứng dụng trước.")
         compat = self._section(content, "Tương thích")
         for title, key in [
             ("Dùng timer độ chính xác cao", "PreciseTiming"),

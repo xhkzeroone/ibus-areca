@@ -213,7 +213,8 @@ ARECA_CONFIGURATION(
     im::Option<int, im::IntConstrain> postCommitDelayMs{
         this, "PostCommitDelayMs", N_("Delay sau mỗi commit (ms)"), 20,
         im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> afterMarkerCommitWaitMs{
+    // Không đưa ra app cài đặt; vẫn đọc khi người dùng sửa tay file cấu hình.
+    im::HiddenOption<int, im::IntConstrain> afterMarkerCommitWaitMs{
         this, "AfterMarkerCommitWaitMs",
         N_("Chờ sau marker trước khi xoá bằng phím (ms)"), 10,
         im::IntConstrain(0, 5000)};

@@ -690,6 +690,14 @@ int main() {
   assert(advancedConfig.useUinputInsteadOfForwardKey.value());
   assert(!advancedConfig.useNativeInsteadOfUinput.value());
   assert(advancedConfig.surroundingProbeTimeoutMs.value() == 80);
+  // Thời gian chờ sau marker không có trong app cài đặt nhưng vẫn đọc từ file.
+  assert(advancedConfig.afterMarkerCommitWaitMs.value() == 10);
+  {
+    areca::im::RawConfig raw;
+    raw.setValueByPath("AfterMarkerCommitWaitMs", "25");
+    advancedConfig.load(raw);
+    assert(advancedConfig.afterMarkerCommitWaitMs.value() == 25);
+  }
 
   areca::ArecaConfig mainConfig;
   // Biểu tượng khay riêng mặc định tắt để hành vi cũ không đổi.
