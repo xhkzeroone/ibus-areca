@@ -85,14 +85,16 @@ private:
 };
 
 struct Harness {
-  explicit Harness(areca::MarkerDelivery delivery, uint32_t markerWaitMs = 30)
+  explicit Harness(areca::MarkerDelivery delivery, uint32_t markerWaitMs = 30,
+                   uint32_t probeTimeoutMs = 80)
       : context(manager), backend(delivery, context),
         scheduler(
             loop, [this](areca::im::InputContext &) { return &engine; },
-            [markerWaitMs](areca::im::InputContext &) {
+            [markerWaitMs, probeTimeoutMs](areca::im::InputContext &) {
               areca::SchedulerTiming timing;
               timing.postCommitDelayMs = 0;
               timing.afterMarkerCommitWaitMs = markerWaitMs;
+              timing.surroundingProbeTimeoutMs = probeTimeoutMs;
               return timing;
             },
             [] { return false; },
@@ -220,6 +222,73 @@ void testContextLostDuringMarkerWait() {
   assert(!scheduler.stalled());
 }
 
+// Ô có surrounding: "a" vừa gõ, gõ tiếp "a" để thành "â". Trả về thời điểm
+// enqueue.
+uint64_t startMarkerWithSurrounding(Harness &h) {
+  h.context.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
+  h.context.surroundingText().setText("", 0, 0);
+  h.scheduler.enqueue(h.context, 'a', "a");
+  runLoopFor(h.loop, 2000);
+  h.context.surroundingText().setText("a", 1, 1);
+  h.context.events.clear();
+  h.observed.clear();
+  const uint64_t startUsec = areca::im::now(CLOCK_MONOTONIC);
+  h.scheduler.enqueue(h.context, 'a', "a");
+  return startUsec;
+}
+
+void reportSurrounding(Harness &h, const std::string &text) {
+  const auto length = static_cast<unsigned int>(areca::im::utf8::length(text));
+  h.context.surroundingText().setText(text, length, length);
+  h.scheduler.notifySurroundingTextUpdated(h.context);
+}
+
+// Chromium bỏ qua lệnh xoá tới trước khi nó báo marker: đợi update có marker
+// rồi mới xoá, update cũ không đủ.
+void testSurroundingWaitsForMarkerEcho() {
+  Harness h(areca::MarkerDelivery::InputMethod, 30, 500);
+  const uint64_t startUsec = startMarkerWithSurrounding(h);
+  assert((h.context.events == std::vector<std::string>{"commit:" + kMarker}));
+  assert(h.backend.applyTimesUsec.empty());
+
+  reportSurrounding(h, "a");
+  runLoopFor(h.loop, 5000);
+  assert(h.backend.applyTimesUsec.empty());
+
+  reportSurrounding(h, "a" + kMarker);
+  runLoopFor(h.loop, 5000);
+  assert(h.backend.applyTimesUsec.size() == 1);
+  // Xoá ngay khi có marker, không đợi hết 500 ms.
+  assert(h.backend.applyTimesUsec.front() - startUsec < 400000);
+  assert((h.context.events == std::vector<std::string>{"commit:" + kMarker,
+                                                       "delete:2",
+                                                       "commit:\xC3\xA2"}));
+  // Update sau đó không gọi backend thêm lần nào.
+  reportSurrounding(h, "a" + kMarker);
+  runLoopFor(h.loop, 2000);
+  assert(h.backend.applyTimesUsec.size() == 1);
+}
+
+void testSurroundingDeletesAfterTimeoutWithoutEcho() {
+  Harness h(areca::MarkerDelivery::InputMethod, 30, 40);
+  const uint64_t startUsec = startMarkerWithSurrounding(h);
+  h.backend.onApply = [&h] { h.loop.exit(); };
+  h.loop.exec();
+  assert(h.backend.applyTimesUsec.size() == 1);
+  assert(h.backend.applyTimesUsec.front() - startUsec >= 40000);
+}
+
+// Backend phím vẫn đợi marker, nhưng ứng dụng báo marker sớm thì phát phím
+// luôn.
+void testKeysStartEarlyOnMarkerEcho() {
+  Harness h(areca::MarkerDelivery::Keys, 500, 80);
+  const uint64_t startUsec = startMarkerWithSurrounding(h);
+  reportSurrounding(h, "a" + kMarker);
+  runLoopFor(h.loop, 5000);
+  assert(h.backend.applyTimesUsec.size() == 1);
+  assert(h.backend.applyTimesUsec.front() - startUsec < 400000);
+}
+
 } // namespace
 
 int main() {
@@ -227,6 +296,9 @@ int main() {
   testKeyDeliveryWaitsForMarker();
   testKeyDeliveryWithoutWaitStillRunsAfterPost();
   testContextLostDuringMarkerWait();
+  testSurroundingWaitsForMarkerEcho();
+  testSurroundingDeletesAfterTimeoutWithoutEcho();
+  testKeysStartEarlyOnMarkerEcho();
   std::cout << "Rewrite marker test passed successfully\n";
   return 0;
 }

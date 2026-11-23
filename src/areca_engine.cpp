@@ -195,6 +195,9 @@ void ArecaEngine::surroundingTextUpdated(im::InputContext &inputContext) {
   if (auto *state = preeditHandler_.stateFor(inputContext)) {
     state->surroundingRestoreArmed = true;
   }
+  // Cuối cùng mới báo scheduler: nó có thể bắt đầu xoá, và update này là của
+  // lúc marker vừa vào, không phải xác nhận xoá.
+  scheduler_.notifySurroundingTextUpdated(inputContext);
 }
 
 void ArecaEngine::announceSwitchedIn() {

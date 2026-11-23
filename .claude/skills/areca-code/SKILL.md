@@ -37,7 +37,7 @@ ibus-areca là engine IBus viết bằng C++20. Engine ghép dấu là Bamboo vi
 1. `ArecaEngine::keyEvent` lọc ô mật khẩu, terminal, menu chọn backend, phím phát lại từ uinput.
 2. `RewriteModeHandler::handleKeyEvent` quyết định forward, reset, restore surrounding hoặc đưa vào `InputScheduler`.
 3. `InputScheduler::processNext` gọi Bamboo, nhận `BambooResult`.
-4. `deleteCount == 0` thì `commitString` ngay. Ngược lại chọn backend, commit marker `kRewriteMarker` ("·"), tạo `RewritePlan` xoá `deleteCount + 1` và gọi `RewriteBackend::apply`: ngay nếu `markerDelivery()` là `InputMethod`, sau `afterMarkerCommitWaitMs` ở pha post nếu là `Keys`. Commit observer nhận `deleteCount`, không nhận marker.
+4. `deleteCount == 0` thì `commitString` ngay. Ngược lại chọn backend, commit marker `kRewriteMarker` ("·"), tạo `RewritePlan` xoá `deleteCount + 1` và gọi `RewriteBackend::apply` sau khi marker đã vào ô: ô có surrounding thì đợi update có text trước con trỏ kết thúc bằng "·" (`InputScheduler::notifySurroundingTextUpdated`, engine gọi sau cùng khi nhận surrounding), tối đa `surroundingProbeTimeoutMs` với `InputMethod` hoặc `afterMarkerCommitWaitMs` với `Keys`; không có surrounding thì `InputMethod` xoá ngay, `Keys` đợi `afterMarkerCommitWaitMs`. Backend luôn bắt đầu ở pha post. Commit observer nhận `deleteCount`, không nhận marker.
 5. Backend trả `Completed`, `Pending` hoặc `Failed`. `Pending` phải gọi `RewriteDone` đúng một lần với đúng `transactionId`.
 6. Scheduler chờ post-commit barrier rồi mới lấy phím kế tiếp. Backend `Failed` làm scheduler `stalled` để không phá thứ tự phím.
 

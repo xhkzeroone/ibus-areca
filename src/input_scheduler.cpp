@@ -5,6 +5,7 @@
 
 #include "im/im.h"
 
+#include "surrounding_probe_match.h"
 #include "surrounding_text_cache.h"
 
 namespace areca {
@@ -304,56 +305,98 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   // deleteCount ký tự rồi chèn chữ mới. Cache surrounding phải có marker để
   // lệnh xoá N+1 ký tự tính đúng vị trí.
   const std::string marker(kRewriteMarker);
+  // Chỉ ứng dụng có surrounding mới báo lại được rằng marker đã vào ô.
+  const bool canEcho = inputContext.capabilityFlags().test(
+                           im::CapabilityFlag::SurroundingText) &&
+                       inputContext.surroundingText().isValid();
   inputContext.commitString(marker);
   updateSurroundingCacheAfterCommit(inputContext, marker);
-  if (backend.markerDelivery() == MarkerDelivery::InputMethod) {
+
+  // Chromium bỏ qua lệnh xoá tới liền sau commit, khi nó chưa kịp báo lại trạng
+  // thái mới: marker còn nguyên và probe hết giờ. Vì vậy đợi ứng dụng báo
+  // surrounding có marker rồi mới xoá; ứng dụng không báo thì xoá khi hết giờ.
+  // Phím xoá đi kênh khác commit cũng phải đợi, kẻo tới trước marker và xoá
+  // nhầm một ký tự thật.
+  const bool keys = backend.markerDelivery() == MarkerDelivery::Keys;
+  const uint32_t waitMs = keys      ? activeTiming_.afterMarkerCommitWaitMs
+                          : canEcho ? activeTiming_.surroundingProbeTimeoutMs
+                                    : 0;
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: rewrite marker tx=" << plan.transactionId
+                 << " backend=" << backend.name() << " wait_ms=" << waitMs
+                 << " wait_echo=" << canEcho;
+  }
+  if (!keys && waitMs == 0) {
     startRewrite(inputContext, backend, plan);
     return;
   }
 
-  const uint32_t waitMs = activeTiming_.afterMarkerCommitWaitMs;
-  if (debugProvider_()) {
-    ARECA_INFO() << "areca: rewrite marker tx=" << plan.transactionId
-                 << " wait_ms=" << waitMs << " backend=" << backend.name();
-  }
-  auto inputContextWatch = inputContext.watch();
-  auto *backendPtr = &backend;
-  // Phát phím ở pha post để event đang chờ, như surrounding update của marker,
-  // được dispatch trước.
-  auto start = [this, inputContextWatch, backendPtr, plan]() {
-    auto *ic = inputContextWatch.get();
-    if (!ic) {
-      if (debugProvider_()) {
-        ARECA_INFO() << "areca: rewrite marker context lost tx="
-                     << plan.transactionId;
-      }
-      activeTransactionId_ = 0;
-      pendingCommitContext_.unwatch();
-      pendingCommitDeleteCount_ = 0;
-      pendingCommitText_.clear();
-      finishKey();
-      return;
-    }
-    startRewrite(*ic, *backendPtr, plan);
-  };
+  markerContext_ = inputContext.watch();
+  markerBackend_ = &backend;
+  markerPlan_ = plan;
+  markerAwaitsEcho_ = canEcho;
   if (waitMs == 0) {
-    markerWaitPost_.schedule(start);
+    markerWaitPost_.schedule([this]() { proceedAfterMarker("no-wait"); });
     return;
   }
   markerWaitTimer_ = eventLoop_.addTimeEvent(
       CLOCK_MONOTONIC,
       im::now(CLOCK_MONOTONIC) + static_cast<uint64_t>(waitMs) * 1000,
-      activeTiming_.timerAccuracyUsec,
-      [this, start](im::EventSourceTime *, uint64_t) {
+      activeTiming_.timerAccuracyUsec, [this](im::EventSourceTime *, uint64_t) {
         auto completedTimer = std::move(markerWaitTimer_);
-        markerWaitPost_.schedule(start);
+        // Phát phím ở pha post để event đang chờ được dispatch trước.
+        markerWaitPost_.schedule([this]() { proceedAfterMarker("timeout"); });
         return false;
       });
   if (!markerWaitTimer_) {
-    markerWaitPost_.schedule(start);
+    markerWaitPost_.schedule([this]() { proceedAfterMarker("no-timer"); });
     return;
   }
   markerWaitTimer_->setOneShot();
+}
+
+void InputScheduler::notifySurroundingTextUpdated(
+    im::InputContext &inputContext) {
+  if (!markerBackend_ || !markerAwaitsEcho_ ||
+      markerContext_.get() != &inputContext) {
+    return;
+  }
+  const auto &surrounding = inputContext.surroundingText();
+  std::string_view before;
+  if (!surrounding.isValid() || surrounding.cursor() != surrounding.anchor() ||
+      !textBeforeCursor(surrounding.text(), surrounding.cursor(), before) ||
+      !before.ends_with(kRewriteMarker)) {
+    // Update cũ từ trước khi marker vào ô.
+    return;
+  }
+  markerAwaitsEcho_ = false;
+  markerWaitTimer_.reset();
+  markerWaitPost_.schedule([this]() { proceedAfterMarker("echo"); });
+}
+
+void InputScheduler::proceedAfterMarker(const char *reason) {
+  auto *backend = std::exchange(markerBackend_, nullptr);
+  auto *inputContext = markerContext_.get();
+  markerContext_.unwatch();
+  markerAwaitsEcho_ = false;
+  markerWaitTimer_.reset();
+  if (!backend) {
+    return;
+  }
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: rewrite marker settled tx="
+                 << markerPlan_.transactionId << " reason=" << reason;
+  }
+  if (!inputContext) {
+    // Ô nhập đã mất: không còn gì để xoá hay commit.
+    activeTransactionId_ = 0;
+    pendingCommitContext_.unwatch();
+    pendingCommitDeleteCount_ = 0;
+    pendingCommitText_.clear();
+    finishKey();
+    return;
+  }
+  startRewrite(*inputContext, *backend, markerPlan_);
 }
 
 void InputScheduler::startRewrite(im::InputContext &inputContext,

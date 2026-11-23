@@ -76,6 +76,9 @@ public:
   void enqueueReplacement(im::InputContext &inputContext, std::string text,
                           ReplacedTextResolver replaced);
   void resetContext(im::InputContext &inputContext);
+  // Ứng dụng báo surrounding mới: rewrite đang đợi marker vào ô thì bắt đầu
+  // xoá.
+  void notifySurroundingTextUpdated(im::InputContext &inputContext);
   void setCommitObserver(CommitObserver observer) {
     commitObserver_ = std::move(observer);
   }
@@ -97,6 +100,7 @@ private:
                    const BambooResult &result, const std::string &rawText);
   void startRewrite(im::InputContext &inputContext, RewriteBackend &backend,
                     const RewritePlan &plan);
+  void proceedAfterMarker(const char *reason);
   void finishKey();
   void finishKeyAfterDelay();
   void finishKeyAfterCommit();
@@ -118,6 +122,11 @@ private:
   std::unique_ptr<im::EventSourceTime> postCommitTimer_;
   std::unique_ptr<im::EventSourceTime> markerWaitTimer_;
   EventLoopPostTask markerWaitPost_;
+  // Rewrite đã commit marker, đang đợi nó tới ứng dụng rồi mới xoá.
+  im::TrackableObjectReference<im::InputContext> markerContext_;
+  RewriteBackend *markerBackend_ = nullptr;
+  RewritePlan markerPlan_;
+  bool markerAwaitsEcho_ = false;
   SchedulerTiming activeTiming_;
   uint64_t nextSequence_ = 1;
   uint64_t nextTransactionId_ = 1;
