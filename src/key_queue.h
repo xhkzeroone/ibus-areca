@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <string>
 
 #include "im/im.h"
@@ -14,6 +15,10 @@ struct QueuedKey {
   std::string utf8Text;
   bool isBackspace = false;
   bool suppressMacro = false;
+  // Có giá trị nghĩa là thay đoạn text nó trả về, ngay trước con trỏ, bằng
+  // utf8Text, như khi chọn emoji. Đoạn cần thay chỉ biết chắc lúc tới lượt xử
+  // lý vì các phím xếp trước có thể còn đổi text.
+  std::function<std::string(im::InputContext &)> replacedText;
   im::TrackableObjectReference<im::InputContext> inputContext;
 };
 

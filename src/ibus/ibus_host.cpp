@@ -4,6 +4,7 @@
 
 #include <gio/gio.h>
 
+#include "ibus/ibus_emoji_loader.h"
 #include "ibus/ibus_input_context.h"
 
 namespace areca {
@@ -69,7 +70,7 @@ IbusHost &IbusHost::instance() {
 }
 
 IbusHost::IbusHost() {
-  engine_ = std::make_unique<ArecaEngine>(*this);
+  engine_ = std::make_unique<ArecaEngine>(*this, loadIbusEmojiAnnotations);
   engine_->userInterfaceManager().setUpdateHook(
       [this](im::SimpleAction *, im::InputContext *) {
         scheduleStatusRefresh();

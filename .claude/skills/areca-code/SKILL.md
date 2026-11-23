@@ -15,7 +15,7 @@ ibus-areca là engine IBus viết bằng C++20. Engine ghép dấu là Bamboo vi
 | Lớp IBus | `src/ibus/` | Mỗi `IBusEngine` là một `IbusInputContext`; `IbusHost` giữ `ArecaEngine` dùng chung, vẽ menu thành `IBusProperty`, theo dõi thư mục config |
 | Engine | `src/areca_engine*` | Nhận `keyEvent`, chọn mode, chọn backend, nạp config, nối mọi thành phần bằng provider; phụ thuộc `EngineHost` thay vì IBus |
 | Mode | `src/mode_handler.h`, `rewrite_mode.*`, `preedit_mode.*`, `redirect_mode.*` | Mỗi mode implement `InputModeHandler` và giữ state riêng |
-| Hàng đợi phím | `src/input_scheduler.*`, `key_queue.h` | FIFO single-flight: một phím xử lý xong mới tới phím sau, có post-commit barrier |
+| Hàng đợi phím | `src/input_scheduler.*`, `key_queue.h` | FIFO single-flight: một phím xử lý xong mới tới phím sau, có post-commit barrier; item replacement thay đoạn text trước con trỏ, như khi chọn emoji |
 | Bamboo | `src/bamboo_engine_adapter.*`, `bamboo-bridge/main.go` | `VietnameseEngine` trả `BambooResult` gồm `deleteCount` và `commitText` |
 | Rewrite backend | `src/rewrite_backend.h` và `*_backend.*` | Xoá chữ cũ rồi commit chữ mới theo `RewritePlan` |
 | Thiết bị phát phím | `uinput_device.*`, `native_device.*` | Interface có hàm virtual để test thay bằng fake |
@@ -29,6 +29,7 @@ ibus-areca là engine IBus viết bằng C++20. Engine ghép dấu là Bamboo vi
 - `areca_engine.cpp`: constructor, `activate`/`keyEvent`/`deactivate`/`reset`, `surroundingTextUpdated`, chọn mode, warmup thiết bị
 - `areca_engine_backend.cpp`: chọn rewrite backend, đánh giá độ tin cậy, cache verdict, probe surrounding
 - `areca_engine_backend_menu.cpp`: menu chọn backend theo app (phím `SelectBackendKey`)
+- `areca_engine_emoji.cpp`: gợi ý emoji khi gõ `:từ`, chọn bằng ↑ ↓ và Enter/Tab; nhận dạng và shortcode kiểu chat ở `emoji_suggestion.h`, từ điển nạp nền ở `emoji_dictionary.*`, đọc file emoji của IBus ở `src/ibus/ibus_emoji_loader.*`
 - `areca_engine_config.cpp`: đọc/ghi config, `timing()`, `applyConfig()`
 - `areca_engine_actions.cpp`: action trên status area và cập nhật UI
 

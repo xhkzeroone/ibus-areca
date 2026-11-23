@@ -67,6 +67,11 @@ public:
   bool handleIdleKey(im::KeyEvent &event, uint32_t codepoint,
                      const std::string &utf8Text);
   void enqueueBackspace(im::InputContext &inputContext);
+  using ReplacedTextResolver = std::function<std::string(im::InputContext &)>;
+  // Xoá đoạn text `replaced` trả về lúc tới lượt rồi chèn `text`, qua cùng
+  // rewrite backend như phím thường. Trả về rỗng thì bỏ qua.
+  void enqueueReplacement(im::InputContext &inputContext, std::string text,
+                          ReplacedTextResolver replaced);
   void resetContext(im::InputContext &inputContext);
   void setCommitObserver(CommitObserver observer) {
     commitObserver_ = std::move(observer);

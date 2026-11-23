@@ -1,3 +1,4 @@
 /build*/
 /.claude/task-notes/
 /.idea/
+__pycache__/

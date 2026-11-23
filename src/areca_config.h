@@ -288,6 +288,8 @@ ARECA_CONFIGURATION(
     im::Option<bool> autoCapitalizeAfterPunctuation{
         this, "AutoCapitalizeAfterPunctuation",
         N_("Tự viết hoa sau dấu kết câu (. ! ?)"), false};
+    im::Option<bool> emojiSuggestion{this, "EmojiSuggestion",
+                                     N_("Gợi ý emoji khi gõ :từ"), false};
     im::Option<bool> enableMacro{this, "EnableMacro", N_("Bật macro"), true};
     im::Option<bool> capitalizeMacro{this, "CapitalizeMacro",
                                      N_("Tự đổi hoa/thường cho nội dung macro"),

@@ -62,6 +62,7 @@ add_library(areca-core STATIC
     src/atspi/atspi_connection.cpp
     src/bamboo_engine_adapter.cpp
     src/browser_autocomplete.cpp
+    src/emoji_dictionary.cpp
     src/forward_backspace_backend.cpp
     src/input_scheduler.cpp
     src/input_type_detector.cpp
@@ -111,6 +112,7 @@ add_library(areca-engine STATIC
     src/areca_engine_backend.cpp
     src/areca_engine_backend_menu.cpp
     src/areca_engine_config.cpp
+    src/areca_engine_emoji.cpp
     src/notification/dynamic_island_announcement.cpp
 )
 target_compile_options(areca-engine PRIVATE -Wall -Wextra -Wpedantic)
@@ -145,6 +147,7 @@ pkg_check_modules(IBUS QUIET IMPORTED_TARGET ibus-1.0)
 if(IBUS_FOUND)
     set(ARECA_EXEC_PATH "${CMAKE_INSTALL_FULL_LIBEXECDIR}/ibus-engine-areca")
     add_executable(ibus-engine-areca
+        src/ibus/ibus_emoji_loader.cpp
         src/ibus/ibus_engine.cpp
         src/ibus/ibus_host.cpp
         src/ibus/ibus_input_context.cpp

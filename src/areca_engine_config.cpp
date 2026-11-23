@@ -233,6 +233,11 @@ void ArecaEngine::applyConfig() {
                  << " forward_first_character="
                  << advancedConfig_.forwardFirstCharacter.value();
 
+  // Nạp từ điển emoji ngay khi bật để lần gõ ":từ" đầu tiên đã có dữ liệu.
+  if (config_.emojiSuggestion.value()) {
+    emojiDictionary_.startLoading();
+  }
+
   if (scheduler_.rewritePending()) {
     return;
   }

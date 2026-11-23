@@ -10,6 +10,7 @@
 #include "adaptive_wait.h"
 #include "areca_config.h"
 #include "bamboo_engine_adapter.h"
+#include "emoji_dictionary.h"
 #include "engine_host.h"
 #include "event_loop_post.h"
 #include "forward_backspace_backend.h"
@@ -57,7 +58,9 @@ struct AppTimingOverrides {
 
 class ArecaEngine final {
 public:
-  explicit ArecaEngine(EngineHost &host);
+  // `emojiLoader` đọc dữ liệu emoji cho gợi ý ":từ"; rỗng thì không gợi ý.
+  explicit ArecaEngine(EngineHost &host,
+                       EmojiAnnotationLoader emojiLoader = {});
   ~ArecaEngine();
   ArecaEngine(const ArecaEngine &) = delete;
   ArecaEngine &operator=(const ArecaEngine &) = delete;
@@ -143,6 +146,14 @@ private:
   bool handleBackendSelectionKey(im::InputContext &inputContext,
                                  im::KeyEvent &event);
 
+  // Gợi ý emoji khi gõ ":từ" ở chế độ Rewrite.
+  void refreshEmojiSuggestions(im::InputContext &inputContext);
+  bool isEmojiSuggesting(im::InputContext &inputContext) const;
+  void hideEmojiSuggestions(im::InputContext &inputContext);
+  bool handleEmojiSuggestionKey(im::InputContext &inputContext,
+                                im::KeyEvent &event);
+  void selectEmoji(im::InputContext &inputContext, std::string emoji);
+
   void initActions();
   void updateUI(im::InputContext *ic);
   void updateInputMethodAction(im::InputContext *ic);
@@ -191,6 +202,8 @@ private:
   NativeShiftSelectBackend nativeShiftSelectBackend_;
   std::unique_ptr<im::EventSourceTime> deviceWarmupTimer_;
   EventLoopPostTask backendSelectionPost_;
+  EventLoopPostTask emojiSelectionPost_;
+  EmojiDictionary emojiDictionary_;
   InputScheduler scheduler_;
   RewriteModeHandler rewriteHandler_;
   PreeditModeHandler preeditHandler_;

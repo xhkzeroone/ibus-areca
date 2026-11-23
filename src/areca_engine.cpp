@@ -17,7 +17,7 @@
 
 namespace areca {
 
-ArecaEngine::ArecaEngine(EngineHost &host)
+ArecaEngine::ArecaEngine(EngineHost &host, EmojiAnnotationLoader emojiLoader)
     : host_(host), rewriteStateFactory_([this](im::InputContext &) {
         return new RewriteInputState(
             config_.bambooInputMethod.value(),
@@ -76,6 +76,10 @@ ArecaEngine::ArecaEngine(EngineHost &host)
       nativeShiftSelectBackend_(host_.eventLoop(), nativeDevice_, adaptiveWait_,
                                 [this]() { return debugEnabled(); }),
       backendSelectionPost_(host_.eventLoop()),
+      emojiSelectionPost_(host_.eventLoop()),
+      // Tiếng Việt trước; gõ từ khoá tiếng Anh như ":smile" vẫn ra emoji.
+      emojiDictionary_(std::move(emojiLoader), {"vi", "en"},
+                       [this]() { return debugEnabled(); }),
       scheduler_(
           host_.eventLoop(),
           [this](im::InputContext &inputContext) -> VietnameseEngine * {
@@ -158,6 +162,7 @@ ArecaEngine::ArecaEngine(EngineHost &host)
                                       uint32_t deleteCount,
                                       const std::string &text) {
     rewriteHandler_.noteCommitted(inputContext, deleteCount, text);
+    refreshEmojiSuggestions(inputContext);
   });
   config_.bambooInputMethod.annotation().setList(
       BambooEngineAdapter::inputMethodNames());
@@ -418,6 +423,7 @@ void ArecaEngine::keyEvent(im::KeyEvent &event) {
       inputContext->updateUserInterface(im::UserInterfaceComponent::InputPanel,
                                         true);
     }
+    hideEmojiSuggestions(*inputContext);
     handlerFor(*inputContext).handleKeyEvent(event);
     return;
   }
@@ -430,6 +436,7 @@ void ArecaEngine::keyEvent(im::KeyEvent &event) {
       inputContext->updateUserInterface(im::UserInterfaceComponent::InputPanel,
                                         true);
     }
+    hideEmojiSuggestions(*inputContext);
     if (!event.isRelease()) {
       handlerFor(*inputContext).resetContext(*inputContext);
     }
@@ -457,6 +464,12 @@ void ArecaEngine::keyEvent(im::KeyEvent &event) {
   }
   // Shift-select forward Left và chờ Shift up quay lại trước khi commit.
   if (uinputShiftSelectBackend_.handleKeyEvent(event)) {
+    return;
+  }
+  // Danh sách emoji chỉ giữ mũi tên, Enter, Tab và Esc; phím khác vẫn gõ tiếp.
+  if (isEmojiSuggesting(*inputContext) &&
+      handleEmojiSuggestionKey(*inputContext, event)) {
+    event.filterAndAccept();
     return;
   }
   if (!event.isRelease()) {
@@ -535,11 +548,19 @@ void ArecaEngine::keyEvent(im::KeyEvent &event) {
     }
   }
   handlerFor(*inputContext).handleKeyEvent(event);
+  // Phím không qua commit, như Backspace chuyển tiếp hay phím mũi tên, cũng có
+  // thể làm ":từ" trước con trỏ thay đổi hoặc mất.
+  if (!event.isRelease() &&
+      (config_.emojiSuggestion.value() || isEmojiSuggesting(*inputContext))) {
+    refreshEmojiSuggestions(*inputContext);
+  }
 }
 
 void ArecaEngine::deactivate(im::InputContext &deactivated) {
   auto *inputContext = &deactivated;
   backendSelectionPost_.cancel();
+  emojiSelectionPost_.cancel();
+  hideEmojiSuggestions(*inputContext);
   if (isBackendSelecting(*inputContext)) {
     inputContext->inputPanel().reset();
     inputContext->updateUserInterface(im::UserInterfaceComponent::InputPanel,
