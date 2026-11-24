@@ -14,24 +14,7 @@
 
 namespace areca {
 
-struct SchedulerTiming {
-  uint32_t backspaceDelayMs = 1;
-  uint32_t uinputBackspaceAckTimeoutMs = 150;
-  uint32_t afterBackspaceWaitMs = 10;
-
-  uint32_t uinputShiftSelectDelayMs = 1;
-  uint32_t uinputShiftSelectAckTimeoutMs = 150;
-  uint32_t afterUinputShiftSelectWaitMs = 5;
-
-  uint32_t surroundingWaitMs = 3;
-  uint32_t surroundingProbeTimeoutMs = 80;
-  uint32_t nativeBackspaceDelayMs = 1;
-  uint32_t afterNativeBackspaceWaitMs = 10;
-  uint32_t postCommitDelayMs = 20;
-  uint64_t timerAccuracyUsec = 1;
-  // Chờ marker tới ứng dụng trước khi backend phát phím xoá.
-  uint32_t afterMarkerCommitWaitMs = 10;
-};
+using SchedulerTiming = RewriteTiming;
 
 struct RewriteBackendSelection {
   RewriteBackend *backend = nullptr;

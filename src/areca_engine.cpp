@@ -207,20 +207,13 @@ bool ArecaEngine::eraseFinalizedPreeditWord(
     return false;
   }
 
-  const auto schedulerTiming = timing(inputContext);
   RewritePlan plan;
+  static_cast<RewriteTiming &>(plan) = timing(inputContext);
   plan.transactionId = nextPreeditRecoveryTransactionId_++;
   if (!plan.transactionId) {
     plan.transactionId = nextPreeditRecoveryTransactionId_++;
   }
   plan.backspaceCount = backspaceCount;
-  plan.backspaceDelayMs = schedulerTiming.backspaceDelayMs;
-  plan.uinputBackspaceAckTimeoutMs =
-      schedulerTiming.uinputBackspaceAckTimeoutMs;
-  plan.afterBackspaceWaitMs = schedulerTiming.afterBackspaceWaitMs;
-  plan.nativeBackspaceDelayMs = schedulerTiming.nativeBackspaceDelayMs;
-  plan.afterNativeBackspaceWaitMs = schedulerTiming.afterNativeBackspaceWaitMs;
-  plan.timerAccuracyUsec = schedulerTiming.timerAccuracyUsec;
 
   const auto status = backend->apply(
       inputContext, plan, [onDone](uint64_t, RewriteOutcome outcome) {

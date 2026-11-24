@@ -73,7 +73,7 @@ Callback bất đồng bộ giữ `inputContext.watch()` và kiểm tra `.get()`
 - Commit sau thời gian chờ dùng `EventLoopPostTask` để chạy ở pha post. Không dùng timer accuracy 0 để giả lập.
 - Có `clearPending()` đặt lại toàn bộ state, gọi trong destructor và khi hoàn tất.
 - Mất input context thì hoàn tất không commit và báo `Succeeded`, không treo scheduler.
-- Thời gian chờ lấy từ `RewritePlan`. Không hard-code số ms. Engine IBus không biết client đi đường GTK/Qt, XIM hay Wayland nên không tách timing theo frontend.
+- Thời gian chờ lấy từ `RewritePlan`, kế thừa `RewriteTiming` trong `src/types.h` (scheduler dùng cùng struct qua `SchedulerTiming`); thông số mới chỉ khai báo ở đó. Không hard-code số ms. Engine IBus không biết client đi đường GTK/Qt, XIM hay Wayland nên không tách timing theo frontend.
 - Nếu dùng `AdaptiveWait` thì gọi `beginTransaction`, `completeTransaction` hoặc `cancelTransaction` cân xứng.
 
 ### Config

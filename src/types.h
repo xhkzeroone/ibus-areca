@@ -20,9 +20,9 @@ struct BambooResult {
   bool spellcheckRestored = false;
 };
 
-struct RewritePlan {
-  uint64_t transactionId = 0;
-  uint32_t backspaceCount = 0;
+// Thông số thời gian dùng chung cho scheduler và mọi backend. Một nơi khai báo
+// để mặc định của scheduler và của plan không lệch nhau.
+struct RewriteTiming {
   uint32_t backspaceDelayMs = 1;
   uint32_t uinputBackspaceAckTimeoutMs = 150;
   uint32_t afterBackspaceWaitMs = 10;
@@ -35,8 +35,15 @@ struct RewritePlan {
   uint32_t surroundingProbeTimeoutMs = 80;
   uint32_t nativeBackspaceDelayMs = 1;
   uint32_t afterNativeBackspaceWaitMs = 10;
-
+  uint32_t postCommitDelayMs = 20;
   uint64_t timerAccuracyUsec = 1;
+  // Chờ marker tới ứng dụng trước khi backend phát phím xoá.
+  uint32_t afterMarkerCommitWaitMs = 10;
+};
+
+struct RewritePlan : RewriteTiming {
+  uint64_t transactionId = 0;
+  uint32_t backspaceCount = 0;
   std::string commitText;
   bool probeSurrounding = false;
 };

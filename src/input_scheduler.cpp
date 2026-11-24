@@ -258,17 +258,7 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   const auto &timing = activeTiming_;
   RewritePlan plan;
   plan.transactionId = nextTransactionId_++;
-  plan.backspaceDelayMs = timing.backspaceDelayMs;
-  plan.uinputBackspaceAckTimeoutMs = timing.uinputBackspaceAckTimeoutMs;
-  plan.afterBackspaceWaitMs = timing.afterBackspaceWaitMs;
-  plan.uinputShiftSelectDelayMs = timing.uinputShiftSelectDelayMs;
-  plan.uinputShiftSelectAckTimeoutMs = timing.uinputShiftSelectAckTimeoutMs;
-  plan.afterUinputShiftSelectWaitMs = timing.afterUinputShiftSelectWaitMs;
-  plan.surroundingWaitMs = timing.surroundingWaitMs;
-  plan.surroundingProbeTimeoutMs = timing.surroundingProbeTimeoutMs;
-  plan.nativeBackspaceDelayMs = timing.nativeBackspaceDelayMs;
-  plan.afterNativeBackspaceWaitMs = timing.afterNativeBackspaceWaitMs;
-  plan.timerAccuracyUsec = timing.timerAccuracyUsec;
+  static_cast<RewriteTiming &>(plan) = timing;
   plan.commitText = result.commitText;
 
   const auto selection = rewriteBackendSelector_(inputContext, result);
