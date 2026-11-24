@@ -152,7 +152,7 @@ ArecaEngine::ArecaEngine(EngineHost &host, EmojiAnnotationLoader emojiLoader)
   config_.bambooInputMethod.annotation().setList(
       BambooEngineAdapter::inputMethodNames());
   config_.outputCharset.annotation().setList(
-      BambooEngineAdapter::charsetNames());
+      BambooEngineAdapter::offeredCharsetNames());
   reloadConfig();
   focusTracker_ = std::make_unique<WindowFocusTracker>(debugEnabled());
   // Keep AT-SPI monitoring alive in the background. The worker reconnects

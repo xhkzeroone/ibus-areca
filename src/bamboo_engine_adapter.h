@@ -67,6 +67,8 @@ public:
   bool valid() const { return handle_ != 0; }
   static std::vector<std::string> inputMethodNames();
   static std::vector<std::string> charsetNames();
+  // Bảng mã cho người dùng chọn, thứ tự cố định; engine vẫn nhận mọi bảng mã.
+  static std::vector<std::string> offeredCharsetNames();
 
 private:
   BambooResult processImpl(uint32_t codepoint, const std::string &utf8Text,
