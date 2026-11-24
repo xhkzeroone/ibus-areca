@@ -31,8 +31,7 @@ struct SchedulerTiming {
   uint32_t afterNativeBackspaceWaitMs = 10;
   uint32_t postCommitDelayMs = 20;
   uint64_t timerAccuracyUsec = 1;
-  // Chờ marker tới ứng dụng trước khi backend phát phím xoá, đã gồm phần
-  // AdaptiveWait cộng thêm khi máy chậm.
+  // Chờ marker tới ứng dụng trước khi backend phát phím xoá.
   uint32_t afterMarkerCommitWaitMs = 10;
 };
 
