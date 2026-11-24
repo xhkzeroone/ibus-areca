@@ -118,10 +118,10 @@ Lưu ý khi port scheduler: IBus đòi `process-key-event` trả về ngay. Như
 
 ## Cấu hình người dùng cần giữ
 
-`areca.conf` (khoá ini, mặc định): `BambooInputMethod` (Telex 2), `OutputCharset` (Unicode), `SpellcheckMode` (khôi phục ngay khi gõ), `ModernStyle` (true), `EnableMacro` (true), `CapitalizeMacro` (true), `RevertMacroOnBackspace` (true), `MacroBypassModifier` (Shift), `AutoCapitalizeAfterPunctuation` (false), `BackspaceRecovery` (true), `RestoreSurroundingText` (false), `DisableVietnameseInTerminal` (false), `Debug` (false). `areca-advanced.conf` giữ timing từng backend, `AfterMarkerCommitWaitMs` (10, ẩn khỏi app cài đặt, chỉ sửa tay) và các lựa chọn uinput/Native, mouse tracking, `ForwardFirstCharacter` (true, ẩn, chỉ sửa tay). Định nghĩa đầy đủ trong `src/areca_config.h`.
+`areca.conf` (khoá ini, mặc định): `BambooInputMethod` (Telex 2), `OutputCharset` (Unicode), `SpellcheckMode` (khôi phục ngay khi gõ), `ModernStyle` (true), `EnableMacro` (true), `CapitalizeMacro` (true), `RevertMacroOnBackspace` (true), `MacroBypassModifier` (Shift), `AutoCapitalizeAfterPunctuation` (false), `BackspaceRecovery` (true), `RestoreSurroundingText` (false), `DisableVietnameseInTerminal` (false), `Debug` (false). `areca-advanced.conf` giữ timing từng backend (timer luôn chạy độ chính xác 1 µs, không còn `PreciseTiming`), `AfterMarkerCommitWaitMs` (10, ẩn khỏi app cài đặt, chỉ sửa tay) và các lựa chọn uinput/Native, mouse tracking, `ForwardFirstCharacter` (true, ẩn, chỉ sửa tay). Định nghĩa đầy đủ trong `src/areca_config.h`.
 
 ## Kiểm thử
 
 - Mang theo các test logic thuần trong `tests/` (adapter Bamboo, tách từ, so khớp snapshot, restore, scheduler, backend với `InputContext` giả). Thay `InputContext` giả bằng lớp giả của engine IBus.
 - Kịch bản tay bắt buộc trên mỗi đường frontend: gõ `gox ngon laf duwojc` (phải ra `gõ ngon là được`), thêm dấu liên tục trong một từ, Ctrl+A rồi Backspace rồi gõ tiếp, click vào giữa từ cũ rồi sửa dấu, thanh địa chỉ và ô có gợi ý của Chrome, Firefox, LibreOffice, terminal.
-- Bật log debug và đọc theo `docs/DEBUGGING.md`: `rewrite select backend`, `reliability first-probe`, `surrounding snapshot stale during probe`, `surrounding restore …`, `reset rejected`.
+- Bật log debug và đọc theo `docs/DEBUGGING.md`: `rewrite select backend`, `reliability first-probe`, `surrounding snapshot stale during probe`, `surrounding restore …`, `reset rejected`, `rewrite marker … wait_echo=` và `rewrite marker settled tx= reason=`.
