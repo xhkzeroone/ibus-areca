@@ -478,6 +478,8 @@ jobs:
                 --depends typelib-1_0-GdkPixbuf-2_0 \
                 --depends libdbus-1-3 \
                 --depends libinput10 \
+                --depends libei1 \
+                --depends libportal1 \
                 --depends libxkbcommon0 \
                 -C pkgroot-opensuse \
                 -p "dist/ibus-areca-${VERSION}.opensuse-tumbleweed.x86_64.rpm" \
