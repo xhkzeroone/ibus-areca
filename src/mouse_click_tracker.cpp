@@ -1,6 +1,7 @@
 #include "mouse_click_tracker.h"
 
 #include "im/im.h"
+#include <algorithm>
 #include <cerrno>
 #include <csignal>
 #include <cstring>
@@ -12,6 +13,43 @@
 extern char **environ;
 
 namespace areca {
+namespace {
+
+constexpr uint64_t kReapRetryUsec = 20 * 1000;
+constexpr uint64_t kBackoffBaseUsec = 1000 * 1000;
+constexpr uint64_t kBackoffMaxUsec = 5 * 60 * 1000 * 1000ULL;
+// Helper chạy ổn lâu hơn mốc này rồi mới chết thì không tính là lỗi liên tục.
+constexpr uint64_t kStableRunUsec = 60 * 1000 * 1000ULL;
+
+bool tryReap(pid_t pid) {
+  pid_t result;
+  do {
+    result = waitpid(pid, nullptr, WNOHANG);
+  } while (result < 0 && errno == EINTR);
+  // ECHILD: tiến trình không còn là con, không còn gì để thu hồi.
+  return result == pid || (result < 0 && errno == ECHILD);
+}
+
+// Không được waitpid chặn trên event loop. Chưa thu hồi được thì timer tự giữ
+// chính nó thử lại tới khi xong, vì tracker có thể bị huỷ ngay sau stop().
+void reapLater(im::EventLoop &loop, pid_t pid) {
+  if (tryReap(pid))
+    return;
+  auto timer = std::make_shared<std::unique_ptr<im::EventSourceTime>>();
+  *timer = loop.addTimeEvent(
+      CLOCK_MONOTONIC, im::now(CLOCK_MONOTONIC) + kReapRetryUsec, 0,
+      [timer, pid](im::EventSourceTime *source, uint64_t now) {
+        if (!tryReap(pid)) {
+          source->setTime(now + kReapRetryUsec);
+          return true;
+        }
+        // Huỷ timer sau khi callback xong; đây là tham chiếu cuối giữ nó.
+        auto completed = std::move(*timer);
+        return false;
+      });
+}
+
+} // namespace
 
 MouseClickTracker::~MouseClickTracker() { stop(); }
 
@@ -20,6 +58,12 @@ bool MouseClickTracker::start() {
   if (fd_ >= 0)
     return true;
   stop();
+  // Helper vừa lỗi thì chưa spawn lại, tránh mỗi lần đổi focus một lần spawn.
+  if (im::now(CLOCK_MONOTONIC) < retryAfterUsec_) {
+    if (debugEnabled())
+      ARECA_INFO() << "areca: mouse helper start skipped; backoff";
+    return false;
+  }
   // Pipe riêng cho cặp cha/con, không cần địa chỉ socket hay xác thực peer.
   // NONBLOCK tránh treo event loop; CLOEXEC tránh truyền fd thừa sang helper.
   int pipefd[2];
@@ -53,9 +97,11 @@ bool MouseClickTracker::start() {
                  << " error=" << std::strerror(error);
     close(pipefd[0]);
     child_ = -1;
+    recordFailure();
     return false;
   }
   fd_ = pipefd[0];
+  startedUsec_ = im::now(CLOCK_MONOTONIC);
   // Nhận click trên cùng luồng xử lý phím để không sửa trạng thái engine từ
   // thread khác. Callback chỉ đánh dấu, chưa reset khi rewrite còn dang dở.
   source_ = loop_.addIOEvent(
@@ -81,17 +127,33 @@ void MouseClickTracker::stop() {
   if (fd_ >= 0)
     close(fd_);
   fd_ = -1;
+  terminateChild();
+  ready_ = pending_ = false;
+}
+
+void MouseClickTracker::terminateChild() {
   if (child_ > 0) {
     if (debugEnabled())
       ARECA_INFO() << "areca: mouse helper cleanup pid=" << child_;
-    // Helper không có dữ liệu cần lưu; kết thúc dứt điểm và waitpid để không
+    // Helper không có dữ liệu cần lưu; kết thúc dứt điểm và thu hồi để không
     // để lại zombie khi addon bị hủy hoặc khởi động lại helper.
     kill(child_, SIGKILL);
-    while (waitpid(child_, nullptr, 0) < 0 && errno == EINTR) {
-    }
+    reapLater(loop_, child_);
   }
   child_ = -1;
-  ready_ = pending_ = false;
+}
+
+void MouseClickTracker::recordFailure() {
+  const uint64_t now = im::now(CLOCK_MONOTONIC);
+  if (startedUsec_ && now - startedUsec_ >= kStableRunUsec)
+    failures_ = 0;
+  startedUsec_ = 0;
+  const uint64_t delay =
+      std::min(kBackoffBaseUsec << std::min(failures_, 16U), kBackoffMaxUsec);
+  ++failures_;
+  retryAfterUsec_ = now + delay;
+  ARECA_WARN() << "areca: mouse helper failures=" << failures_
+               << " retry_after_ms=" << delay / 1000;
 }
 
 void MouseClickTracker::drain() {
@@ -120,8 +182,7 @@ void MouseClickTracker::drain() {
     } else {
       if (count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
         if (count == 0) {
-          ARECA_WARN() << "areca: mouse helper disconnected pid=" << child_
-                       << "; retry on next activation";
+          ARECA_WARN() << "areca: mouse helper disconnected pid=" << child_;
         } else {
           ARECA_WARN() << "areca: mouse tracker read failed: "
                        << std::strerror(errno);
@@ -133,6 +194,9 @@ void MouseClickTracker::drain() {
         close(fd_);
         fd_ = -1;
         ready_ = false;
+        // Thu hồi ngay thay vì để zombie tới lần activate sau.
+        terminateChild();
+        recordFailure();
       }
       return;
     }

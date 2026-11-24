@@ -1,6 +1,7 @@
 #pragma once
 
 #include "im/im.h"
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <sys/types.h>
@@ -30,6 +31,8 @@ public:
 
 private:
   void drain();
+  void terminateChild();
+  void recordFailure();
   bool debugEnabled() const { return debug_ && debug_(); }
   im::EventLoop &loop_;
   std::function<bool()> debug_;
@@ -38,6 +41,10 @@ private:
   int fd_ = -1;
   bool ready_ = false;
   bool pending_ = false;
+  // Backoff khi helper lỗi liên tục, mốc thời gian theo CLOCK_MONOTONIC (us).
+  unsigned failures_ = 0;
+  uint64_t retryAfterUsec_ = 0;
+  uint64_t startedUsec_ = 0;
 };
 
 } // namespace areca

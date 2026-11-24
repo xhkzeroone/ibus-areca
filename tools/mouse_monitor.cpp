@@ -6,12 +6,34 @@
 #include <fcntl.h>
 #include <memory>
 #include <poll.h>
+#include <sys/stat.h>
+#include <cstring>
 #include <unistd.h>
 
 namespace {
+bool isProperty(udev_device *device, const char *name) {
+  const char *value = udev_device_get_property_value(device, name);
+  return value && std::strcmp(value, "1") == 0;
+}
+// Chỉ mở chuột, touchpad và trackpoint. User trong nhóm input đọc được mọi
+// /dev/input/event*, nếu không lọc thì helper giữ cả fd bàn phím và thức dậy
+// mỗi lần gõ phím.
+bool isPointingDevice(udev *devices, const char *path) {
+  struct stat info;
+  if (stat(path, &info) != 0 || !S_ISCHR(info.st_mode)) return false;
+  udev_device *device = udev_device_new_from_devnum(devices, 'c', info.st_rdev);
+  if (!device) return false;
+  const bool pointing = isProperty(device, "ID_INPUT_MOUSE") ||
+                        isProperty(device, "ID_INPUT_TOUCHPAD") ||
+                        isProperty(device, "ID_INPUT_POINTINGSTICK");
+  udev_device_unref(device);
+  return pointing;
+}
 // Mở thiết bị bằng quyền user/ACL udev hiện có; helper không tự nâng quyền.
 // libinput cần mã lỗi âm, giữ errno trước khi ghi log vì log có thể đổi errno.
-int openDevice(const char *path, int flags, void *) {
+int openDevice(const char *path, int flags, void *userData) {
+  // ENODEV để libinput bỏ qua thiết bị này mà không coi là lỗi seat.
+  if (!isPointingDevice(static_cast<udev *>(userData), path)) return -ENODEV;
   const int fd = open(path, flags | O_CLOEXEC);
   if (fd < 0) {
     const int error = errno;
@@ -35,7 +57,7 @@ int main() {
   std::unique_ptr<udev, decltype(&udev_unref)> devices(udev_new(), udev_unref);
   if (!devices) return 1;
   std::unique_ptr<libinput, decltype(&libinput_unref)> input(
-      libinput_udev_create_context(&interface, nullptr, devices.get()), libinput_unref);
+      libinput_udev_create_context(&interface, devices.get(), devices.get()), libinput_unref);
   // Theo seat của phiên desktop; udev giúp libinput theo dõi cả thiết bị cắm
   // thêm về sau, không phải tự quét hoặc hard-code /dev/input/eventN.
   const char *seat = std::getenv("XDG_SEAT");
