@@ -148,8 +148,6 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &inputContext) {
   apply(o.uinputShiftSelectDelayMs, result.uinputShiftSelectDelayMs);
   apply(o.afterUinputShiftSelectWaitMs, result.afterUinputShiftSelectWaitMs);
   apply(o.surroundingWaitMs, result.surroundingWaitMs);
-  apply(o.surroundingDeleteDelayMs, result.surroundingDeleteDelayMs);
-  apply(o.afterSurroundingDeleteWaitMs, result.afterSurroundingDeleteWaitMs);
   apply(o.nativeBackspaceDelayMs, result.nativeBackspaceDelayMs);
   apply(o.afterNativeBackspaceWaitMs, result.afterNativeBackspaceWaitMs);
   apply(o.postCommitDelayMs, result.postCommitDelayMs);
@@ -169,9 +167,6 @@ SchedulerTiming ArecaEngine::baseTiming() const {
           advancedConfig_.afterUinputShiftSelectWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.surroundingWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.surroundingProbeTimeoutMs.value()),
-      static_cast<uint32_t>(advancedConfig_.surroundingDeleteDelayMs.value()),
-      static_cast<uint32_t>(
-          advancedConfig_.afterSurroundingDeleteWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.nativeBackspaceDelayMs.value()),
       static_cast<uint32_t>(advancedConfig_.afterNativeBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.postCommitDelayMs.value()),
@@ -195,9 +190,6 @@ void ArecaEngine::rebuildAppBackendOverridesMap() {
       timing.afterUinputShiftSelectWaitMs =
           entry.afterUinputShiftSelectWaitMs.value();
       timing.surroundingWaitMs = entry.surroundingWaitMs.value();
-      timing.surroundingDeleteDelayMs = entry.surroundingDeleteDelayMs.value();
-      timing.afterSurroundingDeleteWaitMs =
-          entry.afterSurroundingDeleteWaitMs.value();
       timing.nativeBackspaceDelayMs = entry.nativeBackspaceDelayMs.value();
       timing.afterNativeBackspaceWaitMs =
           entry.afterNativeBackspaceWaitMs.value();

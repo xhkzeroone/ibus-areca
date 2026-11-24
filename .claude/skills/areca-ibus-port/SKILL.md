@@ -49,14 +49,15 @@ Bamboo bridge cung cấp: `ArecaBambooCreate(method, modernStyle)`, `Destroy`, `
 
 | Backend | Cách xoá | Xác nhận |
 |---|---|---|
-| Surrounding V1 | `deleteSurroundingText(-N, N)` một lần | Probe lần đầu |
-| Surrounding V2 | `(-1, 1)` N lần | Xác nhận lần xoá cuối |
+| Surrounding | `deleteSurroundingText(-N, N)` một lần | Probe lần đầu |
 | uinput Backspace | Backspace × N qua `/dev/uinput` | Đếm Backspace quay về engine (ACK) |
 | uinput Shift-select | Shift + Left × N rồi commit đè vùng chọn | Shift up quay về |
 | Native Backspace / Shift-select | Như trên qua libei | Không ACK |
 | ForwardKey Backspace | `forwardKey(Backspace)` × N | Không ACK |
 
 **Marker "·"**: mọi lần xoá ở Rewrite, scheduler commit `kRewriteMarker` (U+00B7) trước, rồi backend xoá Bamboo `deleteCount` + 1 ký tự và commit chữ mới. Không gợi ý tự hoàn thành nào bắt đầu bằng "·", nên trình duyệt bỏ gợi ý hay vùng chọn ngay khi marker vào ô; nhờ vậy không còn nhánh riêng cho autocomplete, thanh địa chỉ hay ô URL. `RewriteBackend::markerDelivery()`: surrounding là `InputMethod`, Backspace và Shift-select là `Keys`. Ô có surrounding hợp lệ thì scheduler đợi ứng dụng báo surrounding có "·" ngay trước con trỏ rồi mới xoá, vì Chromium (Edge) bỏ qua lệnh xoá surrounding tới liền sau commit khi nó chưa báo lại trạng thái mới, làm probe hết giờ và mọi app rơi về Backspace. `InputMethod` đợi tối đa `SurroundingProbeTimeoutMs`, `Keys` đợi đúng `AfterMarkerCommitWaitMs` (không cộng AdaptiveWait) nhưng có update sớm thì phát phím luôn. Không có surrounding thì `InputMethod` xoá ngay, `Keys` đợi đủ giờ. Log `areca: rewrite marker ... wait_echo=` và `areca: rewrite marker settled tx= reason=echo|timeout`. Commit observer vẫn nhận `deleteCount`, không thấy marker. Đường xoá từ của Preedit không có marker.
+
+Đã gỡ Surrounding V2 (xoá `(-1, 1)` N lần): với marker, N+1 lệnh xoá riêng lẻ gây nhấp nháy và Chromium dễ bỏ qua các lệnh xoá liền nhau. Khoá cũ `UseSurroundingV2InsteadOfSurroundingV1`, `SurroundingDeleteDelayMs`, `AfterSurroundingDeleteWaitMs` trong file conf bị bỏ qua khi nạp.
 
 Thứ tự chọn khi `deleteCount > 0` (`selectRewriteBackend`, `src/areca_engine_backend.cpp`):
 1. Terminal: Backspace, ưu tiên phím phần cứng.

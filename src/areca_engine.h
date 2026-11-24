@@ -25,7 +25,6 @@
 #include "rewrite_mode.h"
 #include "surrounding_reliability.h"
 #include "surrounding_text_backend.h"
-#include "surrounding_text_v2_backend.h"
 #include "uinput_backspace_backend.h"
 #include "uinput_device.h"
 #include "uinput_shift_select_backend.h"
@@ -48,8 +47,6 @@ struct AppTimingOverrides {
   int32_t uinputShiftSelectDelayMs = -1;
   int32_t afterUinputShiftSelectWaitMs = -1;
   int32_t surroundingWaitMs = -1;
-  int32_t surroundingDeleteDelayMs = -1;
-  int32_t afterSurroundingDeleteWaitMs = -1;
   int32_t nativeBackspaceDelayMs = -1;
   int32_t afterNativeBackspaceWaitMs = -1;
   int32_t postCommitDelayMs = -1;
@@ -107,7 +104,6 @@ private:
   RewriteBackend *resolvePreferredShiftSelectBackend();
   RewriteBackend *resolvePreferredBackspaceBackend(bool preferHardware = false);
   std::string describeAutoBackend(const std::string &appName);
-  std::string describeSurroundingBackend();
   std::string describeShiftSelectBackend();
   std::string describeBackspaceBackend(bool preferHardware = false);
   ReliabilityDecision evaluateReliability(im::InputContext &inputContext,
@@ -191,7 +187,6 @@ private:
   AdaptiveWait adaptiveWait_;
   // Probe toàn cục chỉ cung cấp tín hiệu cho adaptiveWait_.
   SurroundingTextBackend surroundingBackend_;
-  SurroundingTextV2Backend surroundingV2Backend_;
   ForwardBackspaceBackend forwardBackspaceBackend_;
   UinputDevice uinputDevice_;
   UinputBackspaceBackend uinputBackspaceBackend_;

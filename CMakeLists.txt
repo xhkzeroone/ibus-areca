@@ -76,7 +76,6 @@ add_library(areca-core STATIC
     src/surrounding_text_backend.cpp
     src/surrounding_text_cache.cpp
     src/surrounding_text_restore.cpp
-    src/surrounding_text_v2_backend.cpp
     src/uinput_backspace_backend.cpp
     src/uinput_device.cpp
     src/uinput_shift_select_backend.cpp

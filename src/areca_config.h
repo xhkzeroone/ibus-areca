@@ -120,12 +120,6 @@ ARECA_CONFIGURATION(
     im::HiddenOption<int, im::IntConstrain> surroundingWaitMs{
         this, "SurroundingWaitMs", N_("Delay theo ứng dụng"), -1,
         im::IntConstrain(-1, 5000)};
-    im::HiddenOption<int, im::IntConstrain> surroundingDeleteDelayMs{
-        this, "SurroundingDeleteDelayMs", N_("Delay theo ứng dụng"), -1,
-        im::IntConstrain(-1, 1000)};
-    im::HiddenOption<int, im::IntConstrain> afterSurroundingDeleteWaitMs{
-        this, "AfterSurroundingDeleteWaitMs", N_("Delay theo ứng dụng"), -1,
-        im::IntConstrain(-1, 5000)};
     im::HiddenOption<int, im::IntConstrain> nativeBackspaceDelayMs{
         this, "XTestBackspaceDelayMs", N_("Delay theo ứng dụng"), -1,
         im::IntConstrain(-1, 1000)};
@@ -193,14 +187,6 @@ ARECA_CONFIGURATION(
         this, "SurroundingProbeTimeoutMs",
         N_("Timeout kiểm tra surrounding text (ms)"), 80,
         im::IntConstrain(1, 1000)};
-    im::Option<int, im::IntConstrain> surroundingDeleteDelayMs{
-        this, "SurroundingDeleteDelayMs",
-        N_("Delay giữa các lệnh xóa surrounding v2 (ms)"), 10,
-        im::IntConstrain(0, 1000)};
-    im::Option<int, im::IntConstrain> afterSurroundingDeleteWaitMs{
-        this, "AfterSurroundingDeleteWaitMs",
-        N_("Chờ sau lệnh xóa surrounding v2 cuối (ms)"), 1,
-        im::IntConstrain(0, 5000)};
     // Các key "XTest..." giữ tên cũ để file conf đã lưu vẫn đọc được.
     im::Option<int, im::IntConstrain> nativeBackspaceDelayMs{
         this, "XTestBackspaceDelayMs",
@@ -220,9 +206,6 @@ ARECA_CONFIGURATION(
         im::IntConstrain(0, 5000)};
     im::Option<bool> preciseTiming{this, "PreciseTiming",
                                    N_("Dùng timer độ chính xác cao"), true};
-    im::Option<bool> useSurroundingV2InsteadOfSurroundingV1{
-        this, "UseSurroundingV2InsteadOfSurroundingV1",
-        N_("Dùng Surrounding v2 thay cho Surrounding v1"), false};
     im::Option<bool> useUinputInsteadOfForwardKey{
         this, "UseUinputInsteadOfForwardKey",
         N_("Dùng uinput thay cho ForwardKey"), true};

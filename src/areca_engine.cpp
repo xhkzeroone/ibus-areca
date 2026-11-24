@@ -50,18 +50,6 @@ ArecaEngine::ArecaEngine(EngineHost &host, EmojiAnnotationLoader emojiLoader)
             return resolveSurroundingFallbackBackend(inputContext);
           },
           &adaptiveWait_),
-      surroundingV2Backend_(
-          host_.eventLoop(), [this]() { return debugEnabled(); },
-          [this](im::InputContext &inputContext) {
-            handleSurroundingProbeSucceeded(inputContext);
-          },
-          [this](im::InputContext &inputContext) {
-            handleSurroundingProbeFailed(inputContext);
-          },
-          [this](im::InputContext &inputContext) -> RewriteBackend * {
-            return resolveSurroundingFallbackBackend(inputContext);
-          },
-          &adaptiveWait_),
       forwardBackspaceBackend_(host_.eventLoop(), adaptiveWait_,
                                [this]() { return debugEnabled(); }),
       uinputDevice_([this]() { return debugEnabled(); },
@@ -181,9 +169,6 @@ void ArecaEngine::surroundingTextUpdated(im::InputContext &inputContext) {
   // hủy deadline timer probe.
   if (surroundingBackend_.isProbing()) {
     surroundingBackend_.notifySurroundingTextUpdated(inputContext);
-  }
-  if (surroundingV2Backend_.isProbing()) {
-    surroundingV2Backend_.notifySurroundingTextUpdated(inputContext);
   }
   // Callback chỉ ghi nhận rằng frontend đã đổi text hoặc cursor. Việc đọc và
   // phục hồi được hoãn tới key press để không sửa Bamboo trong event lifecycle

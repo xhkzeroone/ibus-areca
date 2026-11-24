@@ -658,8 +658,6 @@ int main() {
   assert(overrideEntry.uinputShiftSelectDelayMs.value() == -1);
   assert(overrideEntry.afterUinputShiftSelectWaitMs.value() == -1);
   assert(overrideEntry.surroundingWaitMs.value() == -1);
-  assert(overrideEntry.surroundingDeleteDelayMs.value() == -1);
-  assert(overrideEntry.afterSurroundingDeleteWaitMs.value() == -1);
   assert(overrideEntry.nativeBackspaceDelayMs.value() == -1);
   assert(overrideEntry.afterNativeBackspaceWaitMs.value() == -1);
   assert(overrideEntry.postCommitDelayMs.value() == -1);
@@ -675,7 +673,6 @@ int main() {
          40);
 
   areca::AdvancedConfig advancedConfig;
-  assert(!advancedConfig.useSurroundingV2InsteadOfSurroundingV1.value());
   assert(advancedConfig.useUinputInsteadOfForwardKey.value());
   assert(!advancedConfig.useNativeInsteadOfUinput.value());
   assert(advancedConfig.surroundingProbeTimeoutMs.value() == 80);
@@ -686,6 +683,18 @@ int main() {
     raw.setValueByPath("AfterMarkerCommitWaitMs", "25");
     advancedConfig.load(raw);
     assert(advancedConfig.afterMarkerCommitWaitMs.value() == 25);
+  }
+  // File cấu hình cũ còn khoá của Surrounding V2 đã gỡ: bỏ qua, không làm hỏng
+  // các giá trị khác.
+  {
+    areca::AdvancedConfig legacy;
+    areca::im::RawConfig raw;
+    raw.setValueByPath("UseSurroundingV2InsteadOfSurroundingV1", "True");
+    raw.setValueByPath("SurroundingDeleteDelayMs", "30");
+    raw.setValueByPath("AfterSurroundingDeleteWaitMs", "7");
+    raw.setValueByPath("SurroundingWaitMs", "5");
+    legacy.load(raw);
+    assert(legacy.surroundingWaitMs.value() == 5);
   }
 
   areca::ArecaConfig mainConfig;

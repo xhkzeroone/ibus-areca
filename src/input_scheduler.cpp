@@ -266,8 +266,6 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   plan.afterUinputShiftSelectWaitMs = timing.afterUinputShiftSelectWaitMs;
   plan.surroundingWaitMs = timing.surroundingWaitMs;
   plan.surroundingProbeTimeoutMs = timing.surroundingProbeTimeoutMs;
-  plan.surroundingDeleteDelayMs = timing.surroundingDeleteDelayMs;
-  plan.afterSurroundingDeleteWaitMs = timing.afterSurroundingDeleteWaitMs;
   plan.nativeBackspaceDelayMs = timing.nativeBackspaceDelayMs;
   plan.afterNativeBackspaceWaitMs = timing.afterNativeBackspaceWaitMs;
   plan.timerAccuracyUsec = timing.timerAccuracyUsec;

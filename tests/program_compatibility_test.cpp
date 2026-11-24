@@ -129,8 +129,6 @@ int main() {
   assert(plan.nativeBackspaceDelayMs == 1);
   assert(plan.afterNativeBackspaceWaitMs == 10);
   assert(plan.surroundingWaitMs == 3);
-  assert(plan.surroundingDeleteDelayMs == 10);
-  assert(plan.afterSurroundingDeleteWaitMs == 1);
   assert(plan.afterBackspaceWaitMs == 10);
   assert(plan.afterUinputShiftSelectWaitMs == 10);
 }

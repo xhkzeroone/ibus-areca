@@ -33,8 +33,6 @@ struct RewritePlan {
 
   uint32_t surroundingWaitMs = 3;
   uint32_t surroundingProbeTimeoutMs = 80;
-  uint32_t surroundingDeleteDelayMs = 10;
-  uint32_t afterSurroundingDeleteWaitMs = 1;
   uint32_t nativeBackspaceDelayMs = 1;
   uint32_t afterNativeBackspaceWaitMs = 10;
 
