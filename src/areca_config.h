@@ -71,10 +71,6 @@ enum class AppBackendMode {
   SurroundingText = 1,
   ShiftSelect = 2,
   Backspace = 3,
-  UinputShiftSelect = 2,
-  NativeShiftSelect = 2,
-  UinputBackspace = 3,
-  ForwardKey = 3,
   Preedit = 4,
   Redirect = 5
 };
@@ -120,6 +116,7 @@ ARECA_CONFIGURATION(
     im::HiddenOption<int, im::IntConstrain> surroundingWaitMs{
         this, "SurroundingWaitMs", N_("Delay theo ứng dụng"), -1,
         im::IntConstrain(-1, 5000)};
+    // Khoá "XTest..." giữ tên cũ để file conf đã lưu vẫn đọc được.
     im::HiddenOption<int, im::IntConstrain> nativeBackspaceDelayMs{
         this, "XTestBackspaceDelayMs", N_("Delay theo ứng dụng"), -1,
         im::IntConstrain(-1, 1000)};
@@ -207,6 +204,7 @@ ARECA_CONFIGURATION(
     im::Option<bool> useUinputInsteadOfForwardKey{
         this, "UseUinputInsteadOfForwardKey",
         N_("Dùng uinput thay cho ForwardKey"), true};
+    // Khoá giữ tên XTest cũ để file conf đã lưu vẫn đọc được.
     im::Option<bool> useNativeInsteadOfUinput{
         this, "UseXTestInsteadOfUinput",
         N_("Dùng Native (Libei) thay thế uinput"), false};
@@ -236,16 +234,6 @@ ARECA_CONFIGURATION(
         N_("Phím tắt chọn chế độ / backend cho ứng dụng"),
         {im::Key("grave")},
         im::KeyListConstrain(im::KeyConstrainFlag::AllowModifierLess)};
-    im::HiddenOption<int, im::IntConstrain> legacyBackspaceDelayMs{
-        this, "BackspaceDelayMs", N_("Delay giữa các Backspace (ms)"), 1,
-        im::IntConstrain(0, 1000)};
-    im::HiddenOption<int, im::IntConstrain> legacyAfterBackspaceWaitMs{
-        this, "AfterBackspaceWaitMs",
-        N_("Thời gian chờ sau Backspace cuối (ms)"), 10,
-        im::IntConstrain(0, 5000)};
-    im::HiddenOption<int, im::IntConstrain> legacyPostCommitDelayMs{
-        this, "PostCommitDelayMs", N_("Delay sau mỗi commit (ms)"), 20,
-        im::IntConstrain(0, 5000)};
     im::HiddenOption<std::string> trayIcon{
         this, "TrayIcon", N_("Biểu tượng khay hệ thống"), "ibus-areca"};
     im::Option<bool> showTrayIcon{

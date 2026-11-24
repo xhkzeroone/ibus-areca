@@ -89,14 +89,6 @@ void ArecaEngine::setSubConfig(const std::string &path,
 
 void ArecaEngine::reloadConfig() {
   readConfigFile(config_, kMainConfigPath);
-  // Seed the advanced panel from legacy timing fields before loading its own
-  // file. Once the advanced file exists, its values take precedence.
-  advancedConfig_.backspaceDelayMs.setValue(
-      config_.legacyBackspaceDelayMs.value());
-  advancedConfig_.afterBackspaceWaitMs.setValue(
-      config_.legacyAfterBackspaceWaitMs.value());
-  advancedConfig_.postCommitDelayMs.setValue(
-      config_.legacyPostCommitDelayMs.value());
   readConfigFile(advancedConfig_, kAdvancedConfigPath);
   readConfigFile(macroTable_, kMacroConfigPath);
   readConfigFile(appProfiles_, kAppsConfigPath);
