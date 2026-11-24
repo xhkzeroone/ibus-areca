@@ -170,7 +170,9 @@ SchedulerTiming ArecaEngine::baseTiming() const {
       static_cast<uint32_t>(advancedConfig_.nativeBackspaceDelayMs.value()),
       static_cast<uint32_t>(advancedConfig_.afterNativeBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.postCommitDelayMs.value()),
-      advancedConfig_.preciseTiming.value() ? 1U : 0U};
+      // Timer luôn chạy độ chính xác 1 µs: độ trễ vài ms là đáng kể với thứ
+      // tự xoá rồi chèn chữ.
+      1U};
   timing.afterMarkerCommitWaitMs =
       static_cast<uint32_t>(advancedConfig_.afterMarkerCommitWaitMs.value());
   return timing;

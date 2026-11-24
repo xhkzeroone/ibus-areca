@@ -130,5 +130,5 @@ int main() {
   assert(plan.afterNativeBackspaceWaitMs == 10);
   assert(plan.surroundingWaitMs == 3);
   assert(plan.afterBackspaceWaitMs == 10);
-  assert(plan.afterUinputShiftSelectWaitMs == 10);
+  assert(plan.afterUinputShiftSelectWaitMs == 5);
 }

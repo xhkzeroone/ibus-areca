@@ -179,7 +179,7 @@ ARECA_CONFIGURATION(
         im::IntConstrain(1, 5000)};
     im::Option<int, im::IntConstrain> afterUinputShiftSelectWaitMs{
         this, "AfterUinputShiftSelectWaitMs",
-        N_("Chờ sau khi thả Shift uinput (ms)"), 10, im::IntConstrain(0, 5000)};
+        N_("Chờ sau khi thả Shift uinput (ms)"), 5, im::IntConstrain(0, 5000)};
     im::Option<int, im::IntConstrain> surroundingWaitMs{
         this, "SurroundingWaitMs", N_("Chờ sau xóa surrounding text (ms)"), 3,
         im::IntConstrain(0, 5000)};
@@ -204,8 +204,6 @@ ARECA_CONFIGURATION(
         this, "AfterMarkerCommitWaitMs",
         N_("Chờ sau marker trước khi xoá bằng phím (ms)"), 10,
         im::IntConstrain(0, 5000)};
-    im::Option<bool> preciseTiming{this, "PreciseTiming",
-                                   N_("Dùng timer độ chính xác cao"), true};
     im::Option<bool> useUinputInsteadOfForwardKey{
         this, "UseUinputInsteadOfForwardKey",
         N_("Dùng uinput thay cho ForwardKey"), true};

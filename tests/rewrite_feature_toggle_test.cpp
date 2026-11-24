@@ -676,6 +676,7 @@ int main() {
   assert(advancedConfig.useUinputInsteadOfForwardKey.value());
   assert(!advancedConfig.useNativeInsteadOfUinput.value());
   assert(advancedConfig.surroundingProbeTimeoutMs.value() == 80);
+  assert(advancedConfig.afterUinputShiftSelectWaitMs.value() == 5);
   // Thời gian chờ sau marker không có trong app cài đặt nhưng vẫn đọc từ file.
   assert(advancedConfig.afterMarkerCommitWaitMs.value() == 10);
   {

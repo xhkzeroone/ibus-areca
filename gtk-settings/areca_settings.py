@@ -88,13 +88,12 @@ ADVANCED_DEFAULTS = {
     "AfterBackspaceWaitMs": 10,
     "UinputShiftSelectDelayMs": 1,
     "UinputShiftSelectAckTimeoutMs": 150,
-    "AfterUinputShiftSelectWaitMs": 10,
+    "AfterUinputShiftSelectWaitMs": 5,
     "SurroundingWaitMs": 3,
     "SurroundingProbeTimeoutMs": 80,
     "XTestBackspaceDelayMs": 1,
     "AfterXTestBackspaceWaitMs": 10,
     "PostCommitDelayMs": 20,
-    "PreciseTiming": True,
     "UseUinputInsteadOfForwardKey": True,
     "UseXTestInsteadOfUinput": False,
     "EnableMouseTracking": True,
@@ -1288,7 +1287,6 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self._spin(general, "Delay sau mỗi commit (ms)", "PostCommitDelayMs", 5000)
         compat = self._section(content, "Tương thích")
         for title, key in [
-            ("Dùng timer độ chính xác cao", "PreciseTiming"),
             ("Dùng uinput thay ForwardKey", "UseUinputInsteadOfForwardKey"),
             ("Dùng Native (Libei) thay uinput", "UseXTestInsteadOfUinput"),
             ("Reset bộ gõ sau khi click chuột", "EnableMouseTracking"),

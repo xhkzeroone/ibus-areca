@@ -21,7 +21,7 @@ struct SchedulerTiming {
 
   uint32_t uinputShiftSelectDelayMs = 1;
   uint32_t uinputShiftSelectAckTimeoutMs = 150;
-  uint32_t afterUinputShiftSelectWaitMs = 10;
+  uint32_t afterUinputShiftSelectWaitMs = 5;
 
   uint32_t surroundingWaitMs = 3;
   uint32_t surroundingProbeTimeoutMs = 80;
