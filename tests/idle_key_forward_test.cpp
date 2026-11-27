@@ -10,6 +10,19 @@
 
 namespace {
 
+// Backend phím phát phím ở pha post của event loop sau khi commit marker: chạy
+// loop một lúc để lượt sửa tới backend.
+void runLoopFor(areca::im::EventLoop &loop, uint64_t usec) {
+  auto timer =
+      loop.addTimeEvent(CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + usec,
+                        0, [&loop](areca::im::EventSourceTime *, uint64_t) {
+                          loop.exit();
+                          return false;
+                        });
+  timer->setOneShot();
+  loop.exec();
+}
+
 class TestInputContext final : public areca::im::InputContext {
 public:
   explicit TestInputContext(areca::im::InputContextManager &manager)
@@ -103,6 +116,7 @@ int main() {
       [](areca::im::InputContext &) {
         areca::SchedulerTiming timing;
         timing.postCommitDelayMs = 0;
+        timing.afterMarkerCommitWaitMs = 0;
         return timing;
       },
       [] { return false; },
@@ -151,6 +165,7 @@ int main() {
   assert(engine.currentText().empty());
   scheduler.enqueue(inputContext, 'a', "a");
   assert(!scheduler.handleIdleKey(pending, 'a', "a"));
+  runLoopFor(eventLoop, 5000);
   const auto observedBeforeRewrite = observed.size();
   backend.complete();
   // Rewrite bất đồng bộ chỉ được báo khi backend xác nhận xong.
@@ -223,6 +238,7 @@ int main() {
 
   failureScheduler.enqueue(failureInputContext, 'r', "r");
   assert(failureScheduler.rewritePending());
+  runLoopFor(failureEventLoop, 30000);
   failureBackend.fail();
   assert(failureScheduler.stalled());
   assert(failureScheduler.rewritePending());

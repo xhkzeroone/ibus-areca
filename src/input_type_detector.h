@@ -17,6 +17,7 @@ public:
   void setFocusTracker(const WindowFocusTracker *tracker);
 
   bool isTerminal(const std::string &program) const;
+  bool isBrowser(const std::string &program) const;
   bool canForwardBackspaces(const im::InputContext &inputContext,
                             const std::string &program = "") const;
 

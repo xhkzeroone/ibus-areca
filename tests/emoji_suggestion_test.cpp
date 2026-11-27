@@ -246,6 +246,7 @@ void testSchedulerReplacement() {
       [](areca::im::InputContext &) {
         areca::SchedulerTiming timing;
         timing.postCommitDelayMs = 0;
+        timing.afterMarkerCommitWaitMs = 0;
         return timing;
       },
       [] { return false; },
@@ -266,6 +267,7 @@ void testSchedulerReplacement() {
   scheduler.enqueueReplacement(context, "😀", [](areca::im::InputContext &) {
     return std::string(":cười");
   });
+  runLoopFor(loop, 5000);
   assert((backend.backspaces == std::vector<uint32_t>{6}));
   assert((context.commits == std::vector<std::string>{"\xC2\xB7", "😀"}));
   assert(replacedSeen == ":cười");
@@ -291,6 +293,7 @@ void testSchedulerReplacement() {
   engine.nextDeleteCount = 1;
   backend.holdNext = true;
   scheduler.enqueue(context, 'm', "m");
+  runLoopFor(loop, 5000);
   assert(backend.pendingDone);
   scheduler.enqueueReplacement(context, "❤️", [&](areca::im::InputContext &) {
     ++resolverCalls;

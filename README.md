@@ -48,9 +48,10 @@ trình duyệt, Electron, terminal và ứng dụng XWayland.
 - Surrounding text khi ứng dụng hỗ trợ xoá qua giao thức input method.
 - Backspace phát qua uinput, Libei hoặc ForwardKey khi ứng dụng không hỗ trợ
   surrounding text. Shift+Left dùng được khi chọn tay cho từng ứng dụng.
-- Trước mỗi lần sửa chữ, Areca chèn một dấu `·` rồi xoá nó cùng chữ cũ. Gợi ý
-  tự hoàn thành hay vùng chọn của trình duyệt bị dấu này thay mất, nên thanh địa
-  chỉ và ô URL được sửa chữ như ô thường. Dấu `·` có thể chớp lên rất ngắn.
+- Khi sửa chữ bằng phím (Backspace, Shift+Left), Areca chèn tạm dấu `·` rồi xoá
+  nó cùng chữ cũ, để trình duyệt bỏ gợi ý tự hoàn thành và vùng chọn. Dấu `·` có
+  thể chớp lên rất ngắn. Surrounding text không dùng dấu này. Ô URL, ô đang có
+  gợi ý tự hoàn thành hay vùng chọn được sửa bằng Backspace.
 - Tự nhận ra ứng dụng đang focus qua IBus và AT-SPI. Có thể ghi đè chế độ và
   backend cho từng ứng dụng, hoặc bấm phím tắt để chọn ngay trên ứng dụng đang
   dùng.

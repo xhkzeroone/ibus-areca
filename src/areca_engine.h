@@ -32,6 +32,7 @@
 namespace areca {
 
 struct ReliabilityDecision {
+  bool browserAutocomplete = false;
   bool useSurrounding = false;
 };
 

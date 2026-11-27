@@ -61,6 +61,7 @@ add_library(areca-core STATIC
     src/atspi/atspi_accessible.cpp
     src/atspi/atspi_connection.cpp
     src/bamboo_engine_adapter.cpp
+    src/browser_autocomplete.cpp
     src/emoji_dictionary.cpp
     src/forward_backspace_backend.cpp
     src/input_scheduler.cpp

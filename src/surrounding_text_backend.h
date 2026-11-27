@@ -30,6 +30,9 @@ public:
   ~SurroundingTextBackend() override;
 
   const char *name() const override { return "surrounding-text"; }
+  MarkerDelivery markerDelivery() const override {
+    return MarkerDelivery::None;
+  }
   ApplyStatus apply(im::InputContext &inputContext, const RewritePlan &plan,
                     RewriteDone onDone) override;
 

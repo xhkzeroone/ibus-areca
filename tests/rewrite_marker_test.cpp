@@ -128,19 +128,17 @@ void runLoopFor(areca::im::EventLoop &loop, uint64_t usec) {
   loop.exec();
 }
 
-void testInputMethodDeliveryAppliesRightAfterMarker() {
-  Harness h(areca::MarkerDelivery::InputMethod);
+void testNoMarkerDeletesExactly() {
+  Harness h(areca::MarkerDelivery::None);
   h.scheduler.enqueue(h.context, 'a', "a");
   runLoopFor(h.loop, 2000);
   h.context.events.clear();
   h.observed.clear();
 
   h.scheduler.enqueue(h.context, 'a', "a");
-  // Cùng kênh giao thức bộ gõ: xoá ngay, gồm cả marker.
-  assert((h.context.events == std::vector<std::string>{"commit:" + kMarker,
-                                                       "delete:2",
-                                                       "commit:\xC3\xA2"}));
-  // Observer chỉ thấy thay đổi thật của cả lượt, không thấy marker.
+  // Surrounding xoá như trước khi có marker: không commit "·", xoá đúng N.
+  assert((h.context.events ==
+          std::vector<std::string>{"delete:1", "commit:\xC3\xA2"}));
   assert((h.observed == std::vector<std::string>{"1:\xC3\xA2"}));
 }
 
@@ -245,39 +243,6 @@ void reportSurrounding(Harness &h, const std::string &text) {
 
 // Chromium bỏ qua lệnh xoá tới trước khi nó báo marker: đợi update có marker
 // rồi mới xoá, update cũ không đủ.
-void testSurroundingWaitsForMarkerEcho() {
-  Harness h(areca::MarkerDelivery::InputMethod, 30, 500);
-  const uint64_t startUsec = startMarkerWithSurrounding(h);
-  assert((h.context.events == std::vector<std::string>{"commit:" + kMarker}));
-  assert(h.backend.applyTimesUsec.empty());
-
-  reportSurrounding(h, "a");
-  runLoopFor(h.loop, 5000);
-  assert(h.backend.applyTimesUsec.empty());
-
-  reportSurrounding(h, "a" + kMarker);
-  runLoopFor(h.loop, 5000);
-  assert(h.backend.applyTimesUsec.size() == 1);
-  // Xoá ngay khi có marker, không đợi hết 500 ms.
-  assert(h.backend.applyTimesUsec.front() - startUsec < 400000);
-  assert((h.context.events == std::vector<std::string>{"commit:" + kMarker,
-                                                       "delete:2",
-                                                       "commit:\xC3\xA2"}));
-  // Update sau đó không gọi backend thêm lần nào.
-  reportSurrounding(h, "a" + kMarker);
-  runLoopFor(h.loop, 2000);
-  assert(h.backend.applyTimesUsec.size() == 1);
-}
-
-void testSurroundingDeletesAfterTimeoutWithoutEcho() {
-  Harness h(areca::MarkerDelivery::InputMethod, 30, 40);
-  const uint64_t startUsec = startMarkerWithSurrounding(h);
-  h.backend.onApply = [&h] { h.loop.exit(); };
-  h.loop.exec();
-  assert(h.backend.applyTimesUsec.size() == 1);
-  assert(h.backend.applyTimesUsec.front() - startUsec >= 40000);
-}
-
 // Backend phím vẫn đợi marker, nhưng ứng dụng báo marker sớm thì phát phím
 // luôn.
 void testKeysStartEarlyOnMarkerEcho() {
@@ -292,12 +257,10 @@ void testKeysStartEarlyOnMarkerEcho() {
 } // namespace
 
 int main() {
-  testInputMethodDeliveryAppliesRightAfterMarker();
+  testNoMarkerDeletesExactly();
   testKeyDeliveryWaitsForMarker();
   testKeyDeliveryWithoutWaitStillRunsAfterPost();
   testContextLostDuringMarkerWait();
-  testSurroundingWaitsForMarkerEcho();
-  testSurroundingDeletesAfterTimeoutWithoutEcho();
   testKeysStartEarlyOnMarkerEcho();
   std::cout << "Rewrite marker test passed successfully\n";
   return 0;

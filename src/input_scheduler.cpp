@@ -270,8 +270,10 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
     return;
   }
   auto &backend = *selection.backend;
-  // Xoá thêm marker "·" sắp commit cùng với chữ cũ.
-  plan.backspaceCount = result.deleteCount + 1;
+  // Xoá thêm marker "·" sắp commit cùng với chữ cũ, trừ backend không dùng
+  // marker.
+  const bool useMarker = backend.markerDelivery() != MarkerDelivery::None;
+  plan.backspaceCount = result.deleteCount + (useMarker ? 1 : 0);
   plan.probeSurrounding = selection.probeSurrounding;
   if (selection.surroundingProbeTimeoutMs > 0) {
     plan.surroundingProbeTimeoutMs = selection.surroundingProbeTimeoutMs;
@@ -281,6 +283,7 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
                  << " tx=" << plan.transactionId
                  << " bamboo_delete=" << result.deleteCount
                  << " probe_timeout_ms=" << plan.surroundingProbeTimeoutMs
+                 << " use_marker=" << useMarker
                  << " plan_backspaces=" << plan.backspaceCount;
   }
 
@@ -288,37 +291,29 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   pendingCommitContext_ = inputContext.watch();
   pendingCommitDeleteCount_ = result.deleteCount;
   pendingCommitText_ = result.commitText;
+  if (!useMarker) {
+    startRewrite(inputContext, backend, plan);
+    return;
+  }
 
   // Marker không báo commit observer: xét cả lượt, chữ trong ô vẫn là xoá
-  // deleteCount ký tự rồi chèn chữ mới. Cache surrounding phải có marker để
-  // lệnh xoá N+1 ký tự tính đúng vị trí.
+  // deleteCount ký tự rồi chèn chữ mới.
   const std::string marker(kRewriteMarker);
   // Chỉ ứng dụng có surrounding mới báo lại được rằng marker đã vào ô.
   const bool canEcho = inputContext.capabilityFlags().test(
                            im::CapabilityFlag::SurroundingText) &&
                        inputContext.surroundingText().isValid();
   inputContext.commitString(marker);
-  updateSurroundingCacheAfterCommit(inputContext, marker);
 
-  // Chromium bỏ qua lệnh xoá tới liền sau commit, khi nó chưa kịp báo lại trạng
-  // thái mới: marker còn nguyên và probe hết giờ. Vì vậy đợi ứng dụng báo
-  // surrounding có marker rồi mới xoá; ứng dụng không báo thì xoá khi hết giờ.
-  // Phím xoá đi kênh khác commit cũng phải đợi, kẻo tới trước marker và xoá
-  // nhầm một ký tự thật.
-  const bool keys = backend.markerDelivery() == MarkerDelivery::Keys;
-  const uint32_t waitMs = keys      ? activeTiming_.afterMarkerCommitWaitMs
-                          : canEcho ? activeTiming_.surroundingProbeTimeoutMs
-                                    : 0;
+  // Phím xoá đi kênh khác commit nên phải đợi marker tới ứng dụng, kẻo tới
+  // trước marker và xoá nhầm một ký tự thật. Ứng dụng báo surrounding có marker
+  // sớm hơn thì phát phím ngay.
+  const uint32_t waitMs = activeTiming_.afterMarkerCommitWaitMs;
   if (debugProvider_()) {
     ARECA_INFO() << "areca: rewrite marker tx=" << plan.transactionId
                  << " backend=" << backend.name() << " wait_ms=" << waitMs
                  << " wait_echo=" << canEcho;
   }
-  if (!keys && waitMs == 0) {
-    startRewrite(inputContext, backend, plan);
-    return;
-  }
-
   markerContext_ = inputContext.watch();
   markerBackend_ = &backend;
   markerPlan_ = plan;
