@@ -28,6 +28,7 @@
 #include "uinput_backspace_backend.h"
 #include "uinput_device.h"
 #include "uinput_shift_select_backend.h"
+#include "unmarked_rewrite_backend.h"
 
 namespace areca {
 
@@ -104,6 +105,7 @@ private:
   resolveSurroundingFallbackBackend(im::InputContext &inputContext);
   RewriteBackend *resolvePreferredShiftSelectBackend();
   RewriteBackend *resolvePreferredBackspaceBackend(bool preferHardware = false);
+  RewriteBackend *resolveUnmarkedBackspaceBackend(bool preferHardware);
   std::string describeAutoBackend(const std::string &appName);
   std::string describeShiftSelectBackend();
   std::string describeBackspaceBackend(bool preferHardware = false);
@@ -195,6 +197,11 @@ private:
   NativeDevice nativeDevice_;
   NativeBackspaceBackend nativeBackspaceBackend_;
   NativeShiftSelectBackend nativeShiftSelectBackend_;
+  // Cùng backend Backspace nhưng không marker, cho mục "Backspace unmarked".
+  // Bọc đúng instance gốc để Backspace uinput quay lại vẫn khớp transaction.
+  UnmarkedRewriteBackend unmarkedForwardBackspaceBackend_;
+  UnmarkedRewriteBackend unmarkedUinputBackspaceBackend_;
+  UnmarkedRewriteBackend unmarkedNativeBackspaceBackend_;
   std::unique_ptr<im::EventSourceTime> deviceWarmupTimer_;
   EventLoopPostTask backendSelectionPost_;
   EventLoopPostTask emojiSelectionPost_;

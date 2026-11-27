@@ -72,11 +72,13 @@ enum class AppBackendMode {
   ShiftSelect = 2,
   Backspace = 3,
   Preedit = 4,
-  Redirect = 5
+  Redirect = 5,
+  // Backspace như trước khi có marker: xoá đúng N, không commit "·".
+  BackspaceUnmarked = 6
 };
 ARECA_CONFIG_ENUM_NAME(AppBackendMode, N_("Tự động"), N_("Surrounding"),
                        N_("Shift select"), N_("Backspace"), N_("Preedit"),
-                       N_("Redirect (EN)"));
+                       N_("Redirect (EN)"), N_("Backspace unmarked"));
 
 inline PresentationMode
 presentationModeForAppSetting(AppBackendMode mode, PresentationMode fallback) {
@@ -88,6 +90,7 @@ presentationModeForAppSetting(AppBackendMode mode, PresentationMode fallback) {
   case AppBackendMode::SurroundingText:
   case AppBackendMode::ShiftSelect:
   case AppBackendMode::Backspace:
+  case AppBackendMode::BackspaceUnmarked:
     return PresentationMode::Rewrite;
   case AppBackendMode::Auto:
     return fallback;

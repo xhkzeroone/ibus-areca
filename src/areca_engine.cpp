@@ -63,6 +63,12 @@ ArecaEngine::ArecaEngine(EngineHost &host, EmojiAnnotationLoader emojiLoader)
                               [this]() { return debugEnabled(); }),
       nativeShiftSelectBackend_(host_.eventLoop(), nativeDevice_, adaptiveWait_,
                                 [this]() { return debugEnabled(); }),
+      unmarkedForwardBackspaceBackend_(forwardBackspaceBackend_,
+                                       "forward-backspace-unmarked"),
+      unmarkedUinputBackspaceBackend_(uinputBackspaceBackend_,
+                                      "uinput-backspace-unmarked"),
+      unmarkedNativeBackspaceBackend_(nativeBackspaceBackend_,
+                                      "native-backspace-unmarked"),
       backendSelectionPost_(host_.eventLoop()),
       emojiSelectionPost_(host_.eventLoop()),
       // Tiếng Việt trước; gõ từ khoá tiếng Anh như ":smile" vẫn ra emoji.

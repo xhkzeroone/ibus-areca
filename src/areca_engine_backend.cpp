@@ -209,6 +209,18 @@ ArecaEngine::resolvePreferredBackspaceBackend(bool preferHardware) {
   return &forwardBackspaceBackend_;
 }
 
+RewriteBackend *
+ArecaEngine::resolveUnmarkedBackspaceBackend(bool preferHardware) {
+  RewriteBackend *backend = resolvePreferredBackspaceBackend(preferHardware);
+  if (backend == &uinputBackspaceBackend_) {
+    return &unmarkedUinputBackspaceBackend_;
+  }
+  if (backend == &nativeBackspaceBackend_) {
+    return &unmarkedNativeBackspaceBackend_;
+  }
+  return &unmarkedForwardBackspaceBackend_;
+}
+
 std::string ArecaEngine::describeAutoBackend(const std::string &appName) {
   auto it = lastAutoBackendByApp_.find(appName);
   if (it != lastAutoBackendByApp_.end()) {
@@ -385,6 +397,14 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
         return {resolvePreferredBackspaceBackend(preferHardware)};
       case AppBackendMode::Backspace: {
         auto *bsBackend = resolvePreferredBackspaceBackend(preferHardware);
+        if (debugEnabled()) {
+          ARECA_INFO() << "areca: app-override selected backspace backend="
+                       << bsBackend->name() << " program=" << program;
+        }
+        return {bsBackend};
+      }
+      case AppBackendMode::BackspaceUnmarked: {
+        auto *bsBackend = resolveUnmarkedBackspaceBackend(preferHardware);
         if (debugEnabled()) {
           ARECA_INFO() << "areca: app-override selected backspace backend="
                        << bsBackend->name() << " program=" << program;

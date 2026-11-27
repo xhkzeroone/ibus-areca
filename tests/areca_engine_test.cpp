@@ -192,12 +192,67 @@ void testUrlFieldUsesMarkerAndBackspace() {
   engine.deactivate(context);
 }
 
+// Ứng dụng chọn "Backspace unmarked": xoá như trước khi có marker, không
+// commit "·" và chỉ xoá đúng phần Bamboo yêu cầu.
+void testBackspaceUnmarkedSkipsMarker() {
+  const auto dir = makeConfigDir();
+  writeFile(dir + "/conf/areca-apps.conf",
+            "[AppOverrides/0]\nAppName=kwrite\nMode=\"Backspace unmarked\"\n");
+  FakeHost host(dir);
+  FakeContext context("kwrite");
+  host.contexts.push_back(&context);
+  areca::ArecaEngine engine(host);
+  engine.activate(context);
+
+  typeText(engine, context, "vieet");
+  runFor(2000);
+  assert(context.text == "viêt");
+  const std::vector<std::string> expected = {
+      "commit:i", "commit:e", "backspace", "commit:ê", "commit:t"};
+  assert(context.events == expected);
+  engine.deactivate(context);
+}
+
+void pressKey(areca::ArecaEngine &engine, FakeContext &context,
+              areca::im::KeySym sym) {
+  areca::im::KeyEvent press(&context, areca::im::Key(sym));
+  engine.keyEvent(press);
+  areca::im::KeyEvent release(&context, areca::im::Key(sym), true);
+  engine.keyEvent(release);
+  runFor(20);
+}
+
+// Menu chọn backend có thêm mục thứ năm; A và E vẫn phải trỏ đúng Preedit và
+// Redirect sau khi danh sách dài ra.
+void testBackendMenuShortcuts() {
+  FakeHost host(makeConfigDir());
+  FakeContext context("kwrite");
+  host.contexts.push_back(&context);
+  areca::ArecaEngine engine(host);
+  engine.activate(context);
+
+  pressKey(engine, context, areca::im::Key_grave);
+  pressKey(engine, context, areca::im::Key_5);
+  assert(host.lastInformation == "kwrite -> Backspace unmarked (ForwardKey)");
+
+  pressKey(engine, context, areca::im::Key_grave);
+  pressKey(engine, context, areca::im::Key_a);
+  assert(host.lastInformation == "kwrite -> Preedit");
+
+  pressKey(engine, context, areca::im::Key_grave);
+  pressKey(engine, context, areca::im::Key_e);
+  assert(host.lastInformation == "kwrite -> Redirect (EN)");
+  engine.deactivate(context);
+}
+
 } // namespace
 
 int main() {
   testTypesTelexSentence();
   testConfigRoundTrip();
   testUrlFieldUsesMarkerAndBackspace();
+  testBackspaceUnmarkedSkipsMarker();
+  testBackendMenuShortcuts();
   std::cout << "areca_engine_test passed\n";
   return 0;
 }

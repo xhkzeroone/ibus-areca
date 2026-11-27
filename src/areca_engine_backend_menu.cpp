@@ -67,8 +67,8 @@ void ArecaEngine::showBackendSelectionMenu(im::InputContext &inputContext) {
 
   auto candList = std::make_unique<im::CommonCandidateList>();
   candList->setLayoutHint(im::CandidateLayoutHint::Vertical);
-  candList->setLabels({"1. ", "2. ", "3. ", "4. ", "A. ", "E. "});
-  candList->setPageSize(6);
+  candList->setLabels({"1. ", "2. ", "3. ", "4. ", "5. ", "A. ", "E. "});
+  candList->setPageSize(7);
 
   const bool isTerminal = inputTypeDetector_.isTerminal(appName);
   const bool canForward =
@@ -86,16 +86,19 @@ void ArecaEngine::showBackendSelectionMenu(im::InputContext &inputContext) {
       "Shift select (" + describeShiftSelectBackend() + ")";
   const std::string backspaceTitle =
       "Backspace (" + describeBackspaceBackend(preferHardware) + ")";
+  const std::string backspaceUnmarkedTitle =
+      "Backspace unmarked (" + describeBackspaceBackend(preferHardware) + ")";
 
   struct BackendOption {
     AppBackendMode mode;
     std::string title;
   };
-  const std::array<BackendOption, 6> options = {{
+  const std::array<BackendOption, 7> options = {{
       {AppBackendMode::Auto, autoTitle},
       {AppBackendMode::SurroundingText, surroundingTitle},
       {AppBackendMode::ShiftSelect, shiftTitle},
       {AppBackendMode::Backspace, backspaceTitle},
+      {AppBackendMode::BackspaceUnmarked, backspaceUnmarkedTitle},
       {AppBackendMode::Preedit, "Preedit"},
       {AppBackendMode::Redirect, "Redirect (EN)"},
   }};
@@ -184,6 +187,10 @@ void ArecaEngine::selectBackendForApp(im::InputContext &inputContext,
   case AppBackendMode::Backspace:
     modeDesc = "Backspace (" + describeBackspaceBackend(preferHardware) + ")";
     break;
+  case AppBackendMode::BackspaceUnmarked:
+    modeDesc =
+        "Backspace unmarked (" + describeBackspaceBackend(preferHardware) + ")";
+    break;
   case AppBackendMode::Preedit:
     modeDesc = "Preedit";
     break;
@@ -227,7 +234,7 @@ bool ArecaEngine::handleBackendSelectionKey(im::InputContext &inputContext,
     return true;
   }
 
-  if (sym >= im::Key_1 && sym <= im::Key_4) {
+  if (sym >= im::Key_1 && sym <= im::Key_5) {
     const int idx = sym - im::Key_1;
     if (idx < commonList->size()) {
       commonList->candidate(idx).select(&inputContext);
@@ -236,12 +243,12 @@ bool ArecaEngine::handleBackendSelectionKey(im::InputContext &inputContext,
   }
 
   if (sym == im::Key_a || sym == im::Key_A) {
-    commonList->candidate(4).select(&inputContext);
+    commonList->candidate(5).select(&inputContext);
     return true;
   }
 
   if (sym == im::Key_e || sym == im::Key_E) {
-    commonList->candidate(5).select(&inputContext);
+    commonList->candidate(6).select(&inputContext);
     return true;
   }
 
