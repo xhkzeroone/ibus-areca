@@ -48,7 +48,6 @@ struct AppTimingOverrides {
   int32_t afterBackspaceWaitMs = -1;
   int32_t uinputShiftSelectDelayMs = -1;
   int32_t afterUinputShiftSelectWaitMs = -1;
-  int32_t surroundingWaitMs = -1;
   int32_t nativeBackspaceDelayMs = -1;
   int32_t afterNativeBackspaceWaitMs = -1;
   int32_t postCommitDelayMs = -1;
@@ -99,10 +98,8 @@ private:
   RewriteBackendSelection selectRewriteBackend(im::InputContext &inputContext,
                                                const BambooResult &result);
   RewriteBackend *resolvePreferredSurroundingBackend();
-  void handleSurroundingProbeSucceeded(im::InputContext &inputContext);
-  void handleSurroundingProbeFailed(im::InputContext &inputContext);
-  RewriteBackend *
-  resolveSurroundingFallbackBackend(im::InputContext &inputContext);
+  void handleSurroundingDeleteChecked(im::InputContext &inputContext,
+                                      bool confirmed);
   RewriteBackend *resolvePreferredShiftSelectBackend();
   RewriteBackend *resolvePreferredBackspaceBackend(bool preferHardware = false);
   RewriteBackend *resolveUnmarkedBackspaceBackend(bool preferHardware);
@@ -188,7 +185,6 @@ private:
   // Một trạng thái adaptive dùng chung để khi đổi giữa forward và uinput,
   // thông tin máy đang chậm không bị mất.
   AdaptiveWait adaptiveWait_;
-  // Probe toàn cục chỉ cung cấp tín hiệu cho adaptiveWait_.
   SurroundingTextBackend surroundingBackend_;
   ForwardBackspaceBackend forwardBackspaceBackend_;
   UinputDevice uinputDevice_;

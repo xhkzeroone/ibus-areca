@@ -139,7 +139,6 @@ SchedulerTiming ArecaEngine::timing(im::InputContext &inputContext) {
   apply(o.afterBackspaceWaitMs, result.afterBackspaceWaitMs);
   apply(o.uinputShiftSelectDelayMs, result.uinputShiftSelectDelayMs);
   apply(o.afterUinputShiftSelectWaitMs, result.afterUinputShiftSelectWaitMs);
-  apply(o.surroundingWaitMs, result.surroundingWaitMs);
   apply(o.nativeBackspaceDelayMs, result.nativeBackspaceDelayMs);
   apply(o.afterNativeBackspaceWaitMs, result.afterNativeBackspaceWaitMs);
   apply(o.postCommitDelayMs, result.postCommitDelayMs);
@@ -157,8 +156,6 @@ SchedulerTiming ArecaEngine::baseTiming() const {
           advancedConfig_.uinputShiftSelectAckTimeoutMs.value()),
       static_cast<uint32_t>(
           advancedConfig_.afterUinputShiftSelectWaitMs.value()),
-      static_cast<uint32_t>(advancedConfig_.surroundingWaitMs.value()),
-      static_cast<uint32_t>(advancedConfig_.surroundingProbeTimeoutMs.value()),
       static_cast<uint32_t>(advancedConfig_.nativeBackspaceDelayMs.value()),
       static_cast<uint32_t>(advancedConfig_.afterNativeBackspaceWaitMs.value()),
       static_cast<uint32_t>(advancedConfig_.postCommitDelayMs.value()),
@@ -167,6 +164,12 @@ SchedulerTiming ArecaEngine::baseTiming() const {
       1U};
   timing.afterMarkerCommitWaitMs =
       static_cast<uint32_t>(advancedConfig_.afterMarkerCommitWaitMs.value());
+  timing.surroundingCheckWaitMs =
+      static_cast<uint32_t>(advancedConfig_.surroundingCheckWaitMs.value());
+  timing.surroundingPollMs =
+      static_cast<uint32_t>(advancedConfig_.surroundingPollMs.value());
+  timing.surroundingDeleteCheckWaitMs = static_cast<uint32_t>(
+      advancedConfig_.surroundingDeleteCheckWaitMs.value());
   return timing;
 }
 
@@ -183,7 +186,6 @@ void ArecaEngine::rebuildAppBackendOverridesMap() {
       timing.uinputShiftSelectDelayMs = entry.uinputShiftSelectDelayMs.value();
       timing.afterUinputShiftSelectWaitMs =
           entry.afterUinputShiftSelectWaitMs.value();
-      timing.surroundingWaitMs = entry.surroundingWaitMs.value();
       timing.nativeBackspaceDelayMs = entry.nativeBackspaceDelayMs.value();
       timing.afterNativeBackspaceWaitMs =
           entry.afterNativeBackspaceWaitMs.value();

@@ -40,16 +40,9 @@ ArecaEngine::ArecaEngine(EngineHost &host, EmojiAnnotationLoader emojiLoader)
       }),
       surroundingBackend_(
           host_.eventLoop(), [this]() { return debugEnabled(); },
-          [this](im::InputContext &inputContext) {
-            handleSurroundingProbeSucceeded(inputContext);
-          },
-          [this](im::InputContext &inputContext) {
-            handleSurroundingProbeFailed(inputContext);
-          },
-          [this](im::InputContext &inputContext) -> RewriteBackend * {
-            return resolveSurroundingFallbackBackend(inputContext);
-          },
-          &adaptiveWait_),
+          [this](im::InputContext &inputContext, bool confirmed) {
+            handleSurroundingDeleteChecked(inputContext, confirmed);
+          }),
       forwardBackspaceBackend_(host_.eventLoop(), adaptiveWait_,
                                [this]() { return debugEnabled(); }),
       uinputDevice_([this]() { return debugEnabled(); },
@@ -135,10 +128,6 @@ ArecaEngine::ArecaEngine(EngineHost &host, EmojiAnnotationLoader emojiLoader)
           preeditStateFactory_, [this]() { return debugEnabled(); },
           [this]() { return config_.autoCapitalizeAfterPunctuation.value(); },
           [this]() { return backspaceRecoveryEnabled(); },
-          // Preedit không restore từ surrounding: restore phải xoá từ cũ khỏi
-          // ứng dụng theo snapshot, snapshot sai là xoá nhầm chữ. Tắt hẳn,
-          // không theo RestoreSurroundingText.
-          [] { return false; },
           [this](const im::Key &key) {
             return isMacroBypassSpace(key, config_.macroBypassModifier.value());
           },
@@ -171,18 +160,10 @@ ArecaEngine::ArecaEngine(EngineHost &host, EmojiAnnotationLoader emojiLoader)
 }
 
 void ArecaEngine::surroundingTextUpdated(im::InputContext &inputContext) {
-  // Nếu backend đang ở giai đoạn probe, thông báo để nó xác nhận thành công và
-  // hủy deadline timer probe.
-  if (surroundingBackend_.isProbing()) {
-    surroundingBackend_.notifySurroundingTextUpdated(inputContext);
-  }
   // Callback chỉ ghi nhận rằng frontend đã đổi text hoặc cursor. Việc đọc và
   // phục hồi được hoãn tới key press để không sửa Bamboo trong event lifecycle
   // và để nhận snapshot surrounding mới nhất.
   rewriteHandler_.onSurroundingTextUpdated(inputContext);
-  if (auto *state = preeditHandler_.stateFor(inputContext)) {
-    state->surroundingRestoreArmed = true;
-  }
   // Cuối cùng mới báo scheduler: nó có thể bắt đầu xoá, và update này là của
   // lúc marker vừa vào, không phải xác nhận xoá.
   scheduler_.notifySurroundingTextUpdated(inputContext);
@@ -463,16 +444,16 @@ void ArecaEngine::keyEvent(im::KeyEvent &event) {
     resolveProgram(*inputContext, state);
 
     // Sau click, bỏ state của caret cũ để phím kế tiếp có thể phục hồi phần từ
-    // nằm trước caret mới. Preedit chỉ làm việc này khi composition đã trống,
-    // tránh làm mất chữ nếu frontend chưa kết thúc preedit đang hiển thị.
+    // nằm trước caret mới. Preedit chỉ bỏ state Bamboo khi composition đã
+    // trống, tránh làm mất chữ nếu frontend chưa kết thúc preedit đang hiển
+    // thị.
     if (mouseTracker_ && mouseTracker_->hasPendingClick()) {
       const auto mode = effectivePresentationMode(*inputContext);
       if (mode == PresentationMode::Preedit) {
-        const bool prepared =
-            preeditHandler_.prepareSurroundingRestoreAfterClick(*inputContext);
+        const bool reset = preeditHandler_.resetAfterClick(*inputContext);
         if (debugEnabled())
-          ARECA_INFO() << "areca: preedit mouse restore "
-                       << (prepared ? "armed" : "skipped-active-composition");
+          ARECA_INFO() << "areca: preedit mouse reset "
+                       << (reset ? "applied" : "skipped-active-composition");
         mouseTracker_->clearPendingClick();
       } else if (mode != PresentationMode::Rewrite) {
         if (debugEnabled())

@@ -1,23 +1,20 @@
 #include "surrounding_text_backend.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "im/im.h"
 
-#include "surrounding_probe_match.h"
-#include "surrounding_text_cache.h"
+#include "surrounding_snapshot.h"
 
 namespace areca {
 
 SurroundingTextBackend::SurroundingTextBackend(
     im::EventLoop &eventLoop, DebugProvider debugProvider,
-    ProbeSucceededHandler onProbeSucceeded, ProbeFailedHandler onProbeFailed,
-    FallbackBackendProvider fallbackBackendProvider, AdaptiveWait *adaptiveWait)
+    DeleteCheckHandler onDeleteChecked)
     : eventLoop_(eventLoop), commitPost_(eventLoop),
-      adaptiveWait_(adaptiveWait), debugProvider_(std::move(debugProvider)),
-      onProbeSucceeded_(std::move(onProbeSucceeded)),
-      onProbeFailed_(std::move(onProbeFailed)),
-      fallbackBackendProvider_(std::move(fallbackBackendProvider)) {}
+      debugProvider_(std::move(debugProvider)),
+      onDeleteChecked_(std::move(onDeleteChecked)) {}
 
 SurroundingTextBackend::~SurroundingTextBackend() { clearPending(); }
 
@@ -31,7 +28,6 @@ ApplyStatus SurroundingTextBackend::apply(im::InputContext &inputContext,
   if (plan.backspaceCount == 0) {
     if (!plan.commitText.empty()) {
       inputContext.commitString(plan.commitText);
-      updateSurroundingCacheAfterCommit(inputContext, plan.commitText);
     }
     if (onDone) {
       onDone(plan.transactionId, RewriteOutcome::Succeeded);
@@ -39,333 +35,206 @@ ApplyStatus SurroundingTextBackend::apply(im::InputContext &inputContext,
     return ApplyStatus::Completed;
   }
 
-  if (adaptiveWait_) {
-    adaptiveWait_->beginTransaction();
-  }
-
-  const bool isProbe = plan.probeSurrounding;
-  if (isProbe) {
-    const auto &original = inputContext.surroundingText();
-    originalProbeText_ = original.text();
-    originalProbeCursor_ = original.cursor();
-    auto expected = original;
-    expected.deleteText(-static_cast<int>(plan.backspaceCount),
-                        plan.backspaceCount);
-    expectedProbeText_ = expected.text();
-    expectedProbeCursor_ = expected.cursor();
-    expectedProbeAnchor_ = expected.anchor();
-  }
-
-  // Arm the transaction before asking the frontend to delete. Some frontends
-  // can publish SurroundingTextUpdated synchronously from this call.
   transactionId_ = plan.transactionId;
   inputContext_ = inputContext.watch();
   onDone_ = std::move(onDone);
-  waitMs_ = plan.surroundingWaitMs;
-  timerAccuracyUsec_ = plan.timerAccuracyUsec;
+  backspaceCount_ = plan.backspaceCount;
   commitText_ = plan.commitText;
-  isProbe_ = isProbe;
-  savedPlan_ = plan;
-
-  if (!isProbe) {
-    inputContext.deleteSurroundingText(-static_cast<int>(plan.backspaceCount),
-                                       plan.backspaceCount);
-    updateSurroundingCacheAfterDelete(inputContext,
-                                      -static_cast<int>(plan.backspaceCount),
-                                      plan.backspaceCount);
-  } else {
-    inputContext.deleteSurroundingText(-static_cast<int>(plan.backspaceCount),
-                                       plan.backspaceCount);
-  }
+  expectedTail_ = plan.expectedTextBeforeCursor;
+  pollMs_ = std::max<uint32_t>(1, plan.surroundingPollMs);
+  timerAccuracyUsec_ = plan.timerAccuracyUsec;
+  checkStartUsec_ = im::now(CLOCK_MONOTONIC);
+  checkDeadlineUsec_ =
+      checkStartUsec_ +
+      static_cast<uint64_t>(plan.surroundingCheckWaitMs) * 1000;
+  pollCount_ = 0;
+  verifyDelete_ = plan.verifySurroundingDelete;
+  deleteCheckWaitMs_ = plan.surroundingDeleteCheckWaitMs;
 
   if (debugProvider_()) {
     ARECA_INFO() << "areca: surrounding-text start tx=" << transactionId_
-                 << " delete=" << plan.backspaceCount << " wait_ms=" << waitMs_
-                 << " probe=" << isProbe_;
+                 << " delete=" << backspaceCount_
+                 << " expected_tail=" << expectedTail_
+                 << " check_wait_ms=" << plan.surroundingCheckWaitMs
+                 << " poll_ms=" << pollMs_
+                 << " verify_delete=" << verifyDelete_;
   }
 
-  // A synchronous update may already have confirmed the probe and scheduled
-  // the commit while deleteSurroundingText() was on the stack.
-  if (isProbe_) {
-    scheduleProbeDeadline();
-  } else if (!isProbe) {
-    scheduleCommit();
-  }
+  // Luôn trả Pending và đi tiếp trên event loop, kể cả khi snapshot đã khớp,
+  // để scheduler chỉ nhận một đường hoàn tất qua onDone.
+  pollSnapshot();
   return ApplyStatus::Pending;
 }
 
-void SurroundingTextBackend::notifySurroundingTextUpdated(
-    im::InputContext &inputContext) {
-  if (!isProbe_) {
-    return;
-  }
-  auto *ic = inputContext_.get();
-  if (!ic || ic != &inputContext) {
-    return;
-  }
-
-  ++probeUpdateCount_;
-
-  const auto &surrounding = inputContext.surroundingText();
-  if (!surroundingProbeMatches(surrounding.isValid(), originalProbeText_,
-                               originalProbeCursor_, expectedProbeText_,
-                               expectedProbeCursor_, surrounding.text(),
-                               surrounding.cursor(), surrounding.anchor())) {
-    if (debugProvider_()) {
-      ARECA_INFO() << "areca: surrounding probe ignored unmatched update"
-                   << " tx=" << transactionId_
-                   << " expected_text=" << expectedProbeText_
-                   << " actual_text=" << surrounding.text()
-                   << " expected_size=" << expectedProbeText_.size()
-                   << " actual_size=" << surrounding.text().size()
-                   << " actual_valid=" << surrounding.isValid()
-                   << " expected_cursor=" << expectedProbeCursor_
-                   << " actual_cursor=" << surrounding.cursor()
-                   << " expected_anchor=" << expectedProbeAnchor_
-                   << " actual_anchor=" << surrounding.anchor();
-      ARECA_INFO() << "areca: surrounding probe update count="
-                   << probeUpdateCount_ << " tx=" << transactionId_;
-    }
-    return;
-  }
-
-  if (debugProvider_()) {
-    ARECA_INFO()
-        << "areca: surrounding probe succeeded via SurroundingTextUpdated event"
-        << " tx=" << transactionId_;
-  }
-
-  isProbe_ = false;
-  timer_.reset();
-
-  if (onProbeSucceeded_) {
-    onProbeSucceeded_(inputContext);
-  }
-  // The event already installed the confirmed surrounding snapshot in the
-  // input context. Mutating it again here would delete the same text twice.
-  scheduleCommit();
-}
-
-void SurroundingTextBackend::scheduleCommit() {
-  const uint32_t extraWaitMs =
-      adaptiveWait_ ? adaptiveWait_->effectiveExtraWaitMs(waitMs_) : 0;
-  const uint32_t effectiveWaitMs =
-      adaptiveWait_ ? adaptiveWait_->effectiveWaitMs(waitMs_) : waitMs_;
-  if (debugProvider_() && extraWaitMs > 0) {
-    ARECA_INFO() << "areca: surrounding-text adaptive commit wait tx="
-                 << transactionId_ << " base_ms=" << waitMs_
-                 << " extra_ms=" << extraWaitMs
-                 << " effective_ms=" << effectiveWaitMs;
-  }
-  schedule(effectiveWaitMs, TimerDispatch::PostEvent,
-           [this, extraWaitMs]() { commitAfterAdaptiveWait(extraWaitMs); });
-}
-
-void SurroundingTextBackend::commitAfterAdaptiveWait(
-    uint32_t appliedExtraWaitMs) {
-  if (adaptiveWait_) {
-    const uint32_t currentExtraWaitMs =
-        adaptiveWait_->effectiveExtraWaitMs(waitMs_);
-    if (currentExtraWaitMs > appliedExtraWaitMs) {
-      const uint32_t additionalWaitMs = currentExtraWaitMs - appliedExtraWaitMs;
-      if (debugProvider_()) {
-        ARECA_INFO() << "areca: surrounding-text lag before commit tx="
-                     << transactionId_
-                     << " additional_wait_ms=" << additionalWaitMs;
-      }
-      schedule(additionalWaitMs, TimerDispatch::PostEvent,
-               [this, currentExtraWaitMs]() {
-                 commitAfterAdaptiveWait(currentExtraWaitMs);
-               });
-      return;
-    }
-  }
-  commitAndComplete();
-}
-
-void SurroundingTextBackend::commitAndComplete() {
+void SurroundingTextBackend::pollSnapshot() {
   auto *inputContext = inputContext_.get();
   if (!inputContext) {
-    completeWithoutCommit();
+    finish(RewriteOutcome::Succeeded);
     return;
   }
-
-  if (!commitText_.empty()) {
-    inputContext->commitString(commitText_);
-    updateSurroundingCacheAfterCommit(*inputContext, commitText_);
-  }
-
-  const uint64_t transactionId = transactionId_;
-  auto onDone = std::move(onDone_);
-  if (adaptiveWait_) {
-    const auto adjustment = adaptiveWait_->completeTransaction();
-    if (debugProvider_() && adjustment == AdaptiveWait::Adjustment::Decreased) {
-      ARECA_INFO() << "areca: surrounding-text adaptive wait decayed tx="
-                   << transactionId << " extra_ms="
-                   << adaptiveWait_->effectiveExtraWaitMs(waitMs_);
+  ++pollCount_;
+  const auto &surrounding = inputContext->surroundingText();
+  const bool matched = surroundingSnapshotEndsWith(
+      surrounding.isValid(), surrounding.text(), surrounding.cursor(),
+      surrounding.anchor(), expectedTail_);
+  const uint64_t nowUsec = im::now(CLOCK_MONOTONIC);
+  if (matched || nowUsec >= checkDeadlineUsec_) {
+    if (debugProvider_()) {
+      ARECA_INFO() << "areca: surrounding-text check tx=" << transactionId_
+                   << " matched=" << matched << " polls=" << pollCount_
+                   << " waited_us=" << (nowUsec - checkStartUsec_)
+                   << " expected_tail=" << expectedTail_
+                   << " actual_text=" << surrounding.text()
+                   << " cursor=" << surrounding.cursor()
+                   << " anchor=" << surrounding.anchor();
     }
-  }
-  if (debugProvider_()) {
-    ARECA_INFO() << "areca: surrounding-text complete tx=" << transactionId
-                 << " commit=" << commitText_;
-  }
-  clearPending();
-  if (onDone) {
-    onDone(transactionId, RewriteOutcome::Succeeded);
-  }
-}
-
-void SurroundingTextBackend::completeWithoutCommit() {
-  const uint64_t transactionId = transactionId_;
-  auto onDone = std::move(onDone_);
-  if (adaptiveWait_) {
-    adaptiveWait_->cancelTransaction();
-  }
-  if (debugProvider_()) {
-    ARECA_INFO() << "areca: surrounding-text context lost tx=" << transactionId;
-  }
-  clearPending();
-  if (onDone) {
-    onDone(transactionId, RewriteOutcome::Succeeded);
-  }
-}
-
-void SurroundingTextBackend::schedule(uint32_t delayMs, TimerDispatch dispatch,
-                                      std::function<void()> callback) {
-  timer_.reset();
-  const uint64_t deadline =
-      im::now(CLOCK_MONOTONIC) + static_cast<uint64_t>(delayMs) * 1000;
-  timer_ = eventLoop_.addTimeEvent(
-      CLOCK_MONOTONIC, deadline, timerAccuracyUsec_,
-      [this, deadline, dispatch, callback = std::move(callback)](
-          im::EventSourceTime *, uint64_t) mutable {
-        auto completedTimer = std::move(timer_);
-        if (dispatch == TimerDispatch::PostEvent) {
-          dispatchPostEvent(deadline, std::move(callback));
-        } else {
-          observeAndRun(deadline, std::move(callback));
-        }
-        return false;
-      });
-  if (!timer_) {
-    if (dispatch == TimerDispatch::PostEvent) {
-      dispatchPostEvent(deadline, std::move(callback));
+    if (!matched) {
+      commitPost_.schedule([this]() { finish(RewriteOutcome::NeedsFallback); });
+    } else if (verifyDelete_) {
+      commitPost_.schedule([this]() { deleteAndVerify(); });
     } else {
-      observeAndRun(deadline, std::move(callback));
+      commitPost_.schedule([this]() { deleteAndCommit(); });
     }
     return;
+  }
+  if (!schedulePoll(nowUsec, checkDeadlineUsec_,
+                    &SurroundingTextBackend::pollSnapshot)) {
+    commitPost_.schedule([this]() { finish(RewriteOutcome::NeedsFallback); });
+  }
+}
+
+bool SurroundingTextBackend::schedulePoll(
+    uint64_t nowUsec, uint64_t deadlineUsec,
+    void (SurroundingTextBackend::*poll)()) {
+  const uint64_t nextUsec =
+      std::min(deadlineUsec, nowUsec + static_cast<uint64_t>(pollMs_) * 1000);
+  timer_ =
+      eventLoop_.addTimeEvent(CLOCK_MONOTONIC, nextUsec, timerAccuracyUsec_,
+                              [this, poll](im::EventSourceTime *, uint64_t) {
+                                auto firedTimer = std::move(timer_);
+                                (this->*poll)();
+                                return false;
+                              });
+  if (!timer_) {
+    return false;
   }
   timer_->setOneShot();
+  return true;
 }
 
-void SurroundingTextBackend::dispatchPostEvent(uint64_t deadlineUsec,
-                                               std::function<void()> callback) {
-  commitPost_.schedule(
-      [this, deadlineUsec, callback = std::move(callback)]() mutable {
-        observeAndRun(deadlineUsec, std::move(callback));
-      });
-}
-
-void SurroundingTextBackend::observeAndRun(uint64_t deadlineUsec,
-                                           std::function<void()> callback) {
-  if (adaptiveWait_) {
-    const uint64_t firedAtUsec = im::now(CLOCK_MONOTONIC);
-    const auto adjustment =
-        adaptiveWait_->observeTimer(deadlineUsec, firedAtUsec);
-    if (debugProvider_() && adjustment != AdaptiveWait::Adjustment::None) {
-      ARECA_INFO() << "areca: surrounding-text adaptive wait changed tx="
-                   << transactionId_ << " lateness_us="
-                   << (firedAtUsec > deadlineUsec ? firedAtUsec - deadlineUsec
-                                                  : 0)
-                   << " extra_ms="
-                   << adaptiveWait_->effectiveExtraWaitMs(waitMs_);
-    }
-  }
-  callback();
-}
-
-void SurroundingTextBackend::scheduleProbeDeadline() {
-  const uint32_t timeoutMs = savedPlan_.surroundingProbeTimeoutMs;
-  // Nếu không nhận được SurroundingTextUpdated event
-  // trong thời gian này thì đánh giá ứng dụng không hỗ trợ và chuyển backend.
-  schedule(timeoutMs, TimerDispatch::TimerCallback, [this, timeoutMs]() {
-    if (!isProbe_) {
-      return;
-    }
-    auto *inputContext = inputContext_.get();
-    if (!inputContext) {
-      completeWithoutCommit();
-      return;
-    }
-    if (debugProvider_()) {
-      ARECA_INFO() << "areca: surrounding delete unconfirmed after "
-                   << timeoutMs << "ms tx=" << transactionId_
-                   << " updates=" << probeUpdateCount_;
-    }
-    handleProbeFailure();
-  });
-}
-
-void SurroundingTextBackend::handleProbeFailure() {
+void SurroundingTextBackend::deleteAndCommit() {
   auto *inputContext = inputContext_.get();
   if (!inputContext) {
-    completeWithoutCommit();
+    finish(RewriteOutcome::Succeeded);
     return;
   }
+  // Snapshot vừa khớp nên client đổi số ký tự ra byte đúng.
+  inputContext->deleteSurroundingText(-static_cast<int>(backspaceCount_),
+                                      backspaceCount_);
+  commitAndFinish(*inputContext);
+}
 
-  if (adaptiveWait_) {
-    adaptiveWait_->cancelTransaction();
+void SurroundingTextBackend::commitAndFinish(im::InputContext &inputContext) {
+  if (!commitText_.empty()) {
+    inputContext.commitString(commitText_);
   }
-
-  if (onProbeFailed_) {
-    onProbeFailed_(*inputContext);
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: surrounding-text complete tx=" << transactionId_
+                 << " commit=" << commitText_;
   }
+  finish(RewriteOutcome::Succeeded);
+}
 
-  RewriteBackend *fallbackBackend =
-      fallbackBackendProvider_ ? fallbackBackendProvider_(*inputContext)
-                               : nullptr;
-
-  RewritePlan plan = savedPlan_;
-  // Probe chỉ xác minh deleteSurroundingText. Backend phát phím fallback
-  // tiếp tục theo ACK và timing riêng của nó.
-  plan.probeSurrounding = false;
-  auto onDone = std::move(onDone_);
-  im::TrackableObjectReference<im::InputContext> icWatch =
-      inputContext->watch();
-
-  clearPending();
-
-  auto *ic = icWatch.get();
-  if (!ic) {
-    if (onDone) {
-      onDone(plan.transactionId, RewriteOutcome::Failed);
-    }
+void SurroundingTextBackend::deleteAndVerify() {
+  auto *inputContext = inputContext_.get();
+  if (!inputContext) {
+    finish(RewriteOutcome::Succeeded);
     return;
   }
+  const auto &original = inputContext->surroundingText();
+  originalText_ = original.text();
+  originalCursor_ = original.cursor();
+  auto expected = original;
+  expected.deleteText(-static_cast<int>(backspaceCount_), backspaceCount_);
+  expectedText_ = expected.text();
+  expectedCursor_ = expected.cursor();
+  checkStartUsec_ = im::now(CLOCK_MONOTONIC);
+  checkDeadlineUsec_ =
+      checkStartUsec_ + static_cast<uint64_t>(deleteCheckWaitMs_) * 1000;
+  pollCount_ = 0;
+  inputContext->deleteSurroundingText(-static_cast<int>(backspaceCount_),
+                                      backspaceCount_);
+  // Lệnh xoá có thể làm client báo snapshot mới ngay trong lúc gọi.
+  pollDelete();
+}
 
-  if (fallbackBackend) {
+void SurroundingTextBackend::pollDelete() {
+  auto *inputContext = inputContext_.get();
+  if (!inputContext) {
+    finish(RewriteOutcome::Succeeded);
+    return;
+  }
+  ++pollCount_;
+  const auto &surrounding = inputContext->surroundingText();
+  const bool matched = surroundingDeleteMatches(
+      surrounding.isValid(), originalText_, originalCursor_, expectedText_,
+      expectedCursor_, surrounding.text(), surrounding.cursor(),
+      surrounding.anchor());
+  const uint64_t nowUsec = im::now(CLOCK_MONOTONIC);
+  if (matched || nowUsec >= checkDeadlineUsec_) {
     if (debugProvider_()) {
-      ARECA_INFO()
-          << "areca: fallback from unconfirmed surrounding delete to backend="
-          << fallbackBackend->name() << " tx=" << plan.transactionId;
+      ARECA_INFO() << "areca: surrounding-text delete check tx="
+                   << transactionId_ << " matched=" << matched
+                   << " polls=" << pollCount_
+                   << " waited_us=" << (nowUsec - checkStartUsec_)
+                   << " expected_text=" << expectedText_
+                   << " actual_text=" << surrounding.text()
+                   << " cursor=" << surrounding.cursor()
+                   << " anchor=" << surrounding.anchor();
     }
-    // Keep our callback until apply() confirms ownership. A backend returning
-    // Failed is not required to retain or invoke the callback.
-    const auto status = fallbackBackend->apply(*ic, plan, onDone);
-    if (status == ApplyStatus::Failed) {
-      if (debugProvider_()) {
-        ARECA_INFO() << "areca: fallback backend failed tx="
-                     << plan.transactionId;
-      }
-      if (onDone) {
-        onDone(plan.transactionId, RewriteOutcome::Failed);
-      }
+    if (onDeleteChecked_) {
+      onDeleteChecked_(*inputContext, matched);
+    }
+    if (matched) {
+      commitPost_.schedule([this]() {
+        auto *inputContext = inputContext_.get();
+        if (!inputContext) {
+          finish(RewriteOutcome::Succeeded);
+          return;
+        }
+        commitAndFinish(*inputContext);
+      });
+    } else {
+      // Ứng dụng không làm theo lệnh xoá nên chữ cũ vẫn còn: chạy lại lượt này
+      // bằng Backspace.
+      commitPost_.schedule([this]() { finish(RewriteOutcome::NeedsFallback); });
     }
     return;
   }
+  if (!schedulePoll(nowUsec, checkDeadlineUsec_,
+                    &SurroundingTextBackend::pollDelete)) {
+    if (onDeleteChecked_) {
+      onDeleteChecked_(*inputContext, false);
+    }
+    commitPost_.schedule([this]() { finish(RewriteOutcome::NeedsFallback); });
+  }
+}
 
+void SurroundingTextBackend::finish(RewriteOutcome outcome) {
+  const uint64_t transactionId = transactionId_;
+  auto onDone = std::move(onDone_);
+  if (debugProvider_()) {
+    if (!inputContext_.get()) {
+      ARECA_INFO() << "areca: surrounding-text context lost tx="
+                   << transactionId;
+    } else if (outcome == RewriteOutcome::NeedsFallback) {
+      ARECA_INFO() << "areca: surrounding-text needs fallback tx="
+                   << transactionId;
+    }
+  }
+  clearPending();
   if (onDone) {
-    onDone(plan.transactionId, RewriteOutcome::Failed);
+    onDone(transactionId, outcome);
   }
 }
 
@@ -375,17 +244,20 @@ void SurroundingTextBackend::clearPending() {
   inputContext_.unwatch();
   onDone_ = {};
   transactionId_ = 0;
-  waitMs_ = 0;
-  timerAccuracyUsec_ = 1;
+  backspaceCount_ = 0;
   commitText_.clear();
-  isProbe_ = false;
-  savedPlan_ = {};
-  originalProbeText_.clear();
-  originalProbeCursor_ = 0;
-  expectedProbeText_.clear();
-  expectedProbeCursor_ = 0;
-  expectedProbeAnchor_ = 0;
-  probeUpdateCount_ = 0;
+  expectedTail_.clear();
+  pollMs_ = 1;
+  timerAccuracyUsec_ = 1;
+  checkStartUsec_ = 0;
+  checkDeadlineUsec_ = 0;
+  pollCount_ = 0;
+  verifyDelete_ = false;
+  deleteCheckWaitMs_ = 0;
+  originalText_.clear();
+  originalCursor_ = 0;
+  expectedText_.clear();
+  expectedCursor_ = 0;
 }
 
 } // namespace areca

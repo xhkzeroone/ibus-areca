@@ -405,7 +405,7 @@ printenv | grep -E '^(XMODIFIERS|GTK_IM_MODULE|QT_IM_MODULE|SDL_IM_MODULE)='
 3. Chỉ lấy các dòng quan trọng từ lần khởi động hiện tại:
 
    ```bash
-   journalctl --user -b -t ibus-engine-areca --no-pager | grep -E 'areca.*(rewrite select backend|reliability|probe|surrounding restore|reset rejected|uinput|failed|timeout)'
+   journalctl --user -b -t ibus-engine-areca --no-pager | grep -E 'areca.*(rewrite select backend|reliability|surrounding-text check|surrounding delete check|rewrite fallback|surrounding restore|reset rejected|uinput|failed|timeout)'
    ```
 
 Chạy `ibus-daemon -rxv` trong terminal (không có `-d`) thì log in thẳng ra

@@ -21,13 +21,13 @@ ibus-areca là engine IBus viết bằng C++20. Engine ghép dấu là Bamboo vi
 | Thiết bị phát phím | `uinput_device.*`, `native_device.*` | Interface có hàm virtual để test thay bằng fake |
 | Lag thích nghi | `adaptive_wait.h` | Tăng thời gian chờ khi timer của backend trễ hoặc ACK uinput chậm |
 | Nhận diện app | `window_focus_tracker.*`, `atspi/`, `input_type_detector.*`, `program_compatibility.*` | AT-SPI chạy thread riêng, phần còn lại là hàm thuần |
-| Surrounding text | `surrounding_text_*`, `surrounding_probe_match.h`, `surrounding_reliability.h` | Cache, probe, restore từ đã commit |
+| Surrounding text | `surrounding_text_*`, `surrounding_snapshot.h`, `surrounding_reliability.h` | Kiểm tra snapshot trước khi xoá, verdict, restore từ đã commit. Không tự sửa snapshot sau commit |
 | Cấu hình | `src/areca_config.h` | `ARECA_CONFIGURATION`, file ở `~/.config/ibus-areca/conf/`, UI ở `gtk-settings/` |
 
 `ArecaEngine` được chia theo nhóm hàm, cùng một class. Thêm hàm mới vào đúng file:
 
 - `areca_engine.cpp`: constructor, `activate`/`keyEvent`/`deactivate`/`reset`, `surroundingTextUpdated`, chọn mode, warmup thiết bị
-- `areca_engine_backend.cpp`: chọn rewrite backend, đánh giá độ tin cậy, cache verdict, probe surrounding
+- `areca_engine_backend.cpp`: chọn rewrite backend, đánh giá độ tin cậy, cache verdict surrounding
 - `areca_engine_backend_menu.cpp`: menu chọn backend theo app (phím `SelectBackendKey`)
 - `areca_engine_emoji.cpp`: gợi ý emoji khi gõ `:từ`, chọn bằng ↑ ↓ và Enter/Tab; nhận dạng và shortcode kiểu chat ở `emoji_suggestion.h`, từ điển nạp nền ở `emoji_dictionary.*`, đọc file emoji của IBus ở `src/ibus/ibus_emoji_loader.*`
 - `areca_engine_config.cpp`: đọc/ghi config, `timing()`, `applyConfig()`
@@ -37,8 +37,8 @@ ibus-areca là engine IBus viết bằng C++20. Engine ghép dấu là Bamboo vi
 1. `ArecaEngine::keyEvent` lọc ô mật khẩu, terminal, menu chọn backend, phím phát lại từ uinput.
 2. `RewriteModeHandler::handleKeyEvent` quyết định forward, reset, restore surrounding hoặc đưa vào `InputScheduler`.
 3. `InputScheduler::processNext` gọi Bamboo, nhận `BambooResult`.
-4. `deleteCount == 0` thì `commitString` ngay. Ngược lại chọn backend. Backend surrounding (`MarkerDelivery::None`) xoá đúng `deleteCount` rồi commit, không marker. Backend phím (`Keys`) được commit marker `kRewriteMarker` ("·") trước, `RewritePlan` xoá `deleteCount + 1` và `RewriteBackend::apply` chạy sau `afterMarkerCommitWaitMs`, hoặc sớm hơn khi ứng dụng báo surrounding có text trước con trỏ kết thúc bằng "·" (`InputScheduler::notifySurroundingTextUpdated`, engine gọi sau cùng khi nhận surrounding). Backend phím luôn bắt đầu ở pha post. Commit observer nhận `deleteCount`, không nhận marker.
-5. Backend trả `Completed`, `Pending` hoặc `Failed`. `Pending` phải gọi `RewriteDone` đúng một lần với đúng `transactionId`.
+4. `deleteCount == 0` thì `commitString` ngay. Ngược lại chọn backend. Backend surrounding (`MarkerDelivery::None`) poll snapshot mỗi `SurroundingPollMs` tới khi text trước con trỏ kết thúc bằng từ Bamboo đang giữ (`RewritePlan::expectedTextBeforeCursor`) rồi xoá đúng `deleteCount` và commit, không marker. Quá `SurroundingCheckWaitMs` thì chưa xoá gì, trả `NeedsFallback` để scheduler chạy lại lượt đó bằng backend dự phòng trong `RewriteBackendSelection::fallback` (Backspace có marker). Lần xoá surrounding đầu của mỗi ô (`verifySurroundingDelete`) poll tiếp tới khi snapshot cho thấy chữ đã mất (`surroundingDeleteMatches`, tối đa `SurroundingDeleteCheckWaitMs`) mới commit; không thấy thì verdict thành không tin cậy và lượt đó cũng `NeedsFallback`. Backend phím (`Keys`) được commit marker `kRewriteMarker` ("·") trước, `RewritePlan` xoá `deleteCount + 1` và `RewriteBackend::apply` chạy sau `afterMarkerCommitWaitMs`, hoặc sớm hơn khi ứng dụng báo surrounding có text trước con trỏ kết thúc bằng "·" (`InputScheduler::notifySurroundingTextUpdated`, engine gọi sau cùng khi nhận surrounding). Backend phím luôn bắt đầu ở pha post. Commit observer nhận `deleteCount`, không nhận marker.
+5. Backend trả `Completed`, `Pending` hoặc `Failed`. `Pending` phải gọi `RewriteDone` đúng một lần với đúng `transactionId`, outcome `Succeeded`, `Failed` hoặc `NeedsFallback` (chỉ khi chưa xoá hay commit gì).
 6. Scheduler chờ post-commit barrier rồi mới lấy phím kế tiếp. Backend `Failed` làm scheduler `stalled` để không phá thứ tự phím.
 
 ## Quy tắc bất biến
@@ -112,7 +112,7 @@ Callback bất đồng bộ giữ `inputContext.watch()` và kiểm tra `.get()`
 
 ## Test
 - Mỗi test là một file `tests/xxx_test.cpp` có `main()` dùng `assert`, build với `-Wall -Wextra -Wpedantic -UNDEBUG`, đăng ký trong `CMakeLists.txt` bằng `add_executable`, `target_include_directories` trỏ tới `src`, và `add_test`.
-- Logic thuần nên tách thành hàm hoặc header không phụ thuộc IBus để test trực tiếp, như `adaptive_wait.h`, `surrounding_text_restore.*`, `surrounding_probe_match.h`.
+- Logic thuần nên tách thành hàm hoặc header không phụ thuộc IBus để test trực tiếp, như `adaptive_wait.h`, `surrounding_text_restore.*`, `surrounding_snapshot.h`.
 - Backend test dùng `im::EventLoop` thật, `InputContext` giả override `commitStringImpl`, `deleteSurroundingTextImpl`, `forwardKeyImpl`, và thiết bị giả kế thừa `UinputDevice` hoặc `NativeKeyDevice`.
 - Cần đọc state riêng thì dùng `friend struct XxxTestAccess`, không mở public chỉ để test.
 - Test hành vi thời gian so sánh thứ tự và khoảng tối thiểu, không so bằng chính xác số micro giây.

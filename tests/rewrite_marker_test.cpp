@@ -84,22 +84,53 @@ private:
   TestInputContext &context_;
 };
 
+// Như surrounding khi snapshot không theo kịp: không đụng tới ô, báo scheduler
+// chạy lại lượt bằng backend dự phòng.
+class NeedsFallbackBackend final : public areca::RewriteBackend {
+public:
+  explicit NeedsFallbackBackend(areca::im::EventLoop &loop) : loop_(loop) {}
+
+  const char *name() const override { return "needs-fallback"; }
+  areca::MarkerDelivery markerDelivery() const override {
+    return areca::MarkerDelivery::None;
+  }
+  areca::ApplyStatus apply(areca::im::InputContext &,
+                           const areca::RewritePlan &plan,
+                           areca::RewriteDone onDone) override {
+    backspaceCount = plan.backspaceCount;
+    timer_ = loop_.addTimeEvent(
+        CLOCK_MONOTONIC, areca::im::now(CLOCK_MONOTONIC) + 5000, 1,
+        [transactionId = plan.transactionId,
+         onDone = std::move(onDone)](areca::im::EventSourceTime *, uint64_t) {
+          onDone(transactionId, areca::RewriteOutcome::NeedsFallback);
+          return false;
+        });
+    timer_->setOneShot();
+    return areca::ApplyStatus::Pending;
+  }
+
+  uint32_t backspaceCount = 0;
+
+private:
+  areca::im::EventLoop &loop_;
+  std::unique_ptr<areca::im::EventSourceTime> timer_;
+};
+
 struct Harness {
-  explicit Harness(areca::MarkerDelivery delivery, uint32_t markerWaitMs = 30,
-                   uint32_t probeTimeoutMs = 80)
+  explicit Harness(areca::MarkerDelivery delivery, uint32_t markerWaitMs = 30)
       : context(manager), backend(delivery, context),
         scheduler(
             loop, [this](areca::im::InputContext &) { return &engine; },
-            [markerWaitMs, probeTimeoutMs](areca::im::InputContext &) {
+            [markerWaitMs](areca::im::InputContext &) {
               areca::SchedulerTiming timing;
               timing.postCommitDelayMs = 0;
               timing.afterMarkerCommitWaitMs = markerWaitMs;
-              timing.surroundingProbeTimeoutMs = probeTimeoutMs;
               return timing;
             },
             [] { return false; },
             [this](areca::im::InputContext &, const areca::BambooResult &) {
-              return areca::RewriteBackendSelection{&backend};
+              return areca::RewriteBackendSelection{
+                  selected ? selected : &backend, fallback};
             }) {
     scheduler.setCommitObserver([this](areca::im::InputContext &,
                                        uint32_t deleteCount,
@@ -113,6 +144,8 @@ struct Harness {
   TestInputContext context;
   TestEngine engine;
   RecordingBackend backend;
+  areca::RewriteBackend *selected = nullptr;
+  areca::RewriteBackend *fallback = nullptr;
   areca::InputScheduler scheduler;
   std::vector<std::string> observed;
 };
@@ -246,12 +279,36 @@ void reportSurrounding(Harness &h, const std::string &text) {
 // Backend phím vẫn đợi marker, nhưng ứng dụng báo marker sớm thì phát phím
 // luôn.
 void testKeysStartEarlyOnMarkerEcho() {
-  Harness h(areca::MarkerDelivery::Keys, 500, 80);
+  Harness h(areca::MarkerDelivery::Keys, 500);
   const uint64_t startUsec = startMarkerWithSurrounding(h);
   reportSurrounding(h, "a" + kMarker);
   runLoopFor(h.loop, 5000);
   assert(h.backend.applyTimesUsec.size() == 1);
   assert(h.backend.applyTimesUsec.front() - startUsec < 400000);
+}
+
+// Surrounding không xoá được ở lượt này: chạy lại bằng Backspace, kể cả commit
+// marker và xoá thêm một ký tự cho nó.
+void testNeedsFallbackRetriesWithMarker() {
+  Harness h(areca::MarkerDelivery::Keys, 10);
+  h.scheduler.enqueue(h.context, 'a', "a");
+  runLoopFor(h.loop, 2000);
+  h.context.events.clear();
+  h.observed.clear();
+
+  NeedsFallbackBackend primary(h.loop);
+  h.selected = &primary;
+  h.fallback = &h.backend;
+  h.scheduler.enqueue(h.context, 'a', "a");
+  assert(h.context.events.empty());
+  assert(primary.backspaceCount == 1);
+  runLoopFor(h.loop, 80000);
+  assert((h.context.events == std::vector<std::string>{"commit:" + kMarker,
+                                                       "delete:2",
+                                                       "commit:\xC3\xA2"}));
+  assert(!h.scheduler.rewritePending());
+  assert(!h.scheduler.stalled());
+  assert((h.observed == std::vector<std::string>{"1:\xC3\xA2"}));
 }
 
 } // namespace
@@ -262,6 +319,7 @@ int main() {
   testKeyDeliveryWithoutWaitStillRunsAfterPost();
   testContextLostDuringMarkerWait();
   testKeysStartEarlyOnMarkerEcho();
+  testNeedsFallbackRetriesWithMarker();
   std::cout << "Rewrite marker test passed successfully\n";
   return 0;
 }

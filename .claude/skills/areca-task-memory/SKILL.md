@@ -64,12 +64,12 @@ Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và 
 | Lớp tương thích (event loop, input context, key, config) | `src/im/` |
 | Engine IBus, property, lookup table, preedit | `src/ibus/` |
 | Nhận phím, chọn mode | `src/areca_engine.cpp` (`keyEvent`, `activate`, `reset`) |
-| Chọn backend, verdict, probe | `src/areca_engine_backend.cpp` (`selectRewriteBackend`, `evaluateReliability`) |
+| Chọn backend, verdict surrounding | `src/areca_engine_backend.cpp` (`selectRewriteBackend`, `evaluateReliability`) |
 | Config, `applyConfig`, `timing` | `src/areca_engine_config.cpp`, khai báo option ở `src/areca_config.h` |
 | Menu trạng thái (IBusProperty) | `src/areca_engine_actions.cpp`, vẽ ở `src/ibus/ibus_input_context.cpp` |
 | Rewrite / Preedit | `src/rewrite_mode.*`, `src/preedit_mode.*` |
 | Scheduler, cửa sổ chặn reset | `src/input_scheduler.*` |
-| So khớp snapshot, text đã biết | `src/surrounding_probe_match.h` |
+| So khớp snapshot, text đã biết | `src/surrounding_snapshot.h` |
 | Danh sách app đặc biệt | `src/program_compatibility.cpp` |
 | AT-SPI | `src/window_focus_tracker.cpp`, `src/atspi/` |
 | App cài đặt GTK | `gtk-settings/areca_settings.py` |
@@ -88,7 +88,7 @@ Không chép nội dung code hay git log vào ghi chú; ghi đường dẫn và 
 ## 5. Log và output lệnh
 
 - **Log engine người dùng dán:** chỉ lấy các dòng quyết định, đừng diễn giải từng dòng. Các mẫu cần tìm:
-  `rewrite select backend|reliability first-probe|stale during probe|probe succeeded|surrounding restore|reset rejected|app reset|bamboo result`.
+  `rewrite select backend|reliability first-check|surrounding-text check|surrounding delete check|rewrite fallback|surrounding restore|reset rejected|app reset|bamboo result`.
 - **Gợi ý cho người dùng lệnh lọc sẵn** thay vì xin cả log:
   `journalctl --user -f -t ibus-engine-areca | grep -E "<mẫu ở trên>"` (bật `Debug=True` trong `~/.config/ibus-areca/conf/areca.conf`).
 - **Build và test:** chỉ in phần cần, ví dụ

@@ -6,7 +6,6 @@
 #include "browser_autocomplete.h"
 #include "im/im.h"
 #include "program_compatibility.h"
-#include "surrounding_probe_match.h"
 
 #include "mouse_click_tracker.h"
 #include "window_focus_tracker.h"
@@ -143,39 +142,25 @@ RewriteBackend *ArecaEngine::resolvePreferredSurroundingBackend() {
   return &surroundingBackend_;
 }
 
-void ArecaEngine::handleSurroundingProbeSucceeded(
-    im::InputContext &inputContext) {
-  backendVerdict_.probePending = false;
-  backendVerdict_.retryOnNextWord = false;
-  if (debugEnabled()) {
-    ARECA_INFO() << "areca: surrounding probe succeeded program="
-                 << inputContext.program();
+void ArecaEngine::handleSurroundingDeleteChecked(im::InputContext &inputContext,
+                                                 bool confirmed) {
+  if (!backendVerdictContextKnown_ ||
+      backendVerdictContextId_ != inputContext.uuid()) {
+    return;
   }
-}
-
-void ArecaEngine::handleSurroundingProbeFailed(im::InputContext &inputContext) {
-  auto *state = inputContext.propertyFor(&rewriteStateFactory_);
-  const uint32_t wordSerial = state ? state->wordSerial : 0;
-  backendVerdict_.probeFailed(wordSerial);
-  // Transaction này đã hoàn tất bằng backend dự phòng.
-  noteRewriteBackendChoice(inputContext, nullptr);
+  if (confirmed) {
+    backendVerdict_.deleteConfirmed = true;
+  } else {
+    // Ứng dụng báo surrounding nhưng không làm theo lệnh xoá: cả ô này dùng
+    // Backspace cho tới khi verdict được đánh giá lại.
+    backendVerdict_.known = true;
+    backendVerdict_.reliable = false;
+    noteRewriteBackendChoice(inputContext, nullptr);
+  }
   if (debugEnabled()) {
-    ARECA_INFO() << "areca: surrounding probe failed, marked unreliable"
-                 << " attempt=" << backendVerdict_.probeAttempts
-                 << " retry_next_word=" << backendVerdict_.retryOnNextWord
-                 << " word=" << wordSerial
+    ARECA_INFO() << "areca: surrounding delete check confirmed=" << confirmed
                  << " program=" << inputContext.program();
   }
-}
-
-RewriteBackend *
-ArecaEngine::resolveSurroundingFallbackBackend(im::InputContext &inputContext) {
-  const std::string prog = resolveProgram(
-      inputContext, inputContext.propertyFor(&rewriteStateFactory_));
-  const bool isTerminal = inputTypeDetector_.isTerminal(prog);
-  const bool canForward =
-      inputTypeDetector_.canForwardBackspaces(inputContext, prog);
-  return resolvePreferredBackspaceBackend(isTerminal || !canForward);
 }
 
 RewriteBackend *ArecaEngine::resolvePreferredShiftSelectBackend() {
@@ -368,19 +353,14 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
       case AppBackendMode::SurroundingText:
         if (decision.useSurrounding) {
           auto *surBackend = resolvePreferredSurroundingBackend();
-          if (backendVerdict_.probePending) {
-            backendVerdict_.probeStarted();
-          }
-          const uint32_t probeTimeoutMs =
-              backendVerdict_.probePending
-                  ? backendVerdict_.activeProbeTimeoutMs()
-                  : 0;
           if (debugEnabled()) {
             ARECA_INFO() << "areca: app-override selected surrounding backend="
                          << surBackend->name() << " program=" << program
-                         << " probe_timeout_ms=" << probeTimeoutMs;
+                         << " verify_delete="
+                         << !backendVerdict_.deleteConfirmed;
           }
-          return {surBackend, backendVerdict_.probePending, probeTimeoutMs};
+          return {surBackend, resolvePreferredBackspaceBackend(preferHardware),
+                  !backendVerdict_.deleteConfirmed};
         }
         return {resolvePreferredBackspaceBackend(preferHardware)};
       case AppBackendMode::ShiftSelect:
@@ -425,22 +405,18 @@ ArecaEngine::selectRewriteBackend(im::InputContext &inputContext,
 
   if (decision.useSurrounding) {
     auto *surBackend = resolvePreferredSurroundingBackend();
-    if (backendVerdict_.probePending) {
-      backendVerdict_.probeStarted();
-    }
-    const uint32_t probeTimeoutMs = backendVerdict_.probePending
-                                        ? backendVerdict_.activeProbeTimeoutMs()
-                                        : 0;
     if (!program.empty()) {
       lastAutoBackendByApp_[program] = AppBackendMode::SurroundingText;
     }
     if (debugEnabled()) {
       ARECA_INFO() << "areca: auto selected surrounding backend="
                    << surBackend->name() << " program=" << program
-                   << " probe=" << backendVerdict_.probePending
-                   << " probe_timeout_ms=" << probeTimeoutMs;
+                   << " verify_delete=" << !backendVerdict_.deleteConfirmed;
     }
-    return {surBackend, backendVerdict_.probePending, probeTimeoutMs};
+    // Snapshot không theo kịp thì lượt đó xoá bằng Backspace có marker. Chưa
+    // thấy ứng dụng làm theo lệnh xoá thì backend kiểm tra thêm sau khi xoá.
+    return {surBackend, resolvePreferredBackspaceBackend(preferHardware),
+            !backendVerdict_.deleteConfirmed};
   }
 
   if (!program.empty()) {
@@ -462,25 +438,13 @@ ArecaEngine::evaluateReliability(im::InputContext &inputContext,
       isBrowserAutocomplete(surrounding.text(), surrounding.cursor(),
                             surrounding.anchor(), shownText);
 
-  // Bắt đầu: Probe lại đúng một lần khi bước sang từ kế tiếp
-  auto *state = inputContext.propertyFor(&rewriteStateFactory_);
-  if (!browserAutocomplete && state &&
-      backendVerdict_.retryForWord(state->wordSerial) && debugEnabled()) {
-    ARECA_INFO() << "areca: surrounding probe retry armed"
-                 << " attempt=" << (backendVerdict_.probeAttempts + 1)
-                 << " word=" << state->wordSerial << " program=" << programName;
-  }
-  // Kết thúc: Probe lại đúng một lần khi bước sang từ kế tiếp
-
   if (!backendVerdict_.known && !browserAutocomplete) {
     backendVerdict_.reliable = !isInvalidSurrounding(surrounding);
-    backendVerdict_.probePending = backendVerdict_.reliable;
     if (debugEnabled()) {
-      ARECA_INFO() << "areca: reliability first-probe text="
+      ARECA_INFO() << "areca: reliability first-check text="
                    << surrounding.text() << " cursor=" << surrounding.cursor()
                    << " anchor=" << surrounding.anchor()
-                   << " reliable=" << backendVerdict_.reliable
-                   << " probe_pending=" << backendVerdict_.probePending;
+                   << " reliable=" << backendVerdict_.reliable;
     }
 
     backendVerdict_.forceForwardBackspace = false;
@@ -488,7 +452,7 @@ ArecaEngine::evaluateReliability(im::InputContext &inputContext,
         isOfficeProgram(programName)) {
       backendVerdict_.forceForwardBackspace = true;
       if (debugEnabled()) {
-        ARECA_INFO() << "areca: reliability first-probe force_forward=1"
+        ARECA_INFO() << "areca: reliability first-check force_forward=1"
                      << " reason=programming-terminal-or-office-program"
                      << " program=" << programName;
       }
@@ -497,38 +461,12 @@ ArecaEngine::evaluateReliability(im::InputContext &inputContext,
           inputContext.capabilityFlags().toInteger();
       backendVerdict_.forceForwardBackspace = (capabilityMask == 0x72);
       if (backendVerdict_.forceForwardBackspace && debugEnabled()) {
-        ARECA_INFO() << "areca: reliability first-probe force_forward=1"
+        ARECA_INFO() << "areca: reliability first-check force_forward=1"
                      << " reason=program-compatibility-capability-mask-0x72"
                      << " program=" << programName;
       }
     }
     backendVerdict_.known = true;
-  }
-
-  // Lúc thăm dò, snapshot phải chứa từ đang hiện trong ô. Frontend trễ một nhịp
-  // (báo "g" khi ô đã là "go") khiến probe tính sai kết quả mong đợi rồi nhận
-  // nhầm update cũ là xác nhận xoá. Khi đó coi probe thất bại: dùng
-  // Backspace và thử lại ở từ kế tiếp.
-  const bool staleDuringProbe =
-      !browserAutocomplete && backendVerdict_.probePending &&
-      backendVerdict_.reliable &&
-      surrounding.cursor() == surrounding.anchor() &&
-      !surroundingSnapshotEndsWith(surrounding.isValid(), surrounding.text(),
-                                   surrounding.cursor(), surrounding.anchor(),
-                                   shownText);
-  if (staleDuringProbe) {
-    // Tính là một lần probe để chỉ retry đúng một lần như probe timeout.
-    backendVerdict_.probeStarted();
-    backendVerdict_.probeFailed(state ? state->wordSerial : 0);
-    if (debugEnabled()) {
-      ARECA_INFO() << "areca: surrounding snapshot stale during probe text="
-                   << surrounding.text() << " cursor=" << surrounding.cursor()
-                   << " anchor=" << surrounding.anchor()
-                   << " word=" << shownText << " marked_unreliable=1"
-                   << " attempt=" << backendVerdict_.probeAttempts
-                   << " retry_next_word=" << backendVerdict_.retryOnNextWord
-                   << " program=" << programName;
-    }
   }
 
   if (debugEnabled()) {

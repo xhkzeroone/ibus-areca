@@ -15,7 +15,7 @@ Areca là bộ gõ tiếng Việt chạy dạng addon fcitx5, C++20, dùng `bamb
 | Adapter và diff | `src/bamboo_engine_adapter.*`, `src/types.h` | Interface `VietnameseEngine`, kết quả `BambooResult` |
 | Tách từ, tự viết hoa | `src/word_segment.*`, `src/sentence_capitalizer.*` | Hàm thuần |
 | Khôi phục từ đã commit | `src/surrounding_text_restore.*` | Extractor từ trước con trỏ, tối đa 16 ký tự |
-| So khớp snapshot | `src/surrounding_probe_match.h` | `surroundingProbeMatches`, `surroundingSnapshotEndsWith` (NBSP coi như dấu cách), `updateKnownTextBeforeCursor` |
+| So khớp snapshot | `src/surrounding_snapshot.h` | `surroundingSnapshotEndsWith` (NBSP coi như dấu cách), `surroundingDeleteMatches` (xác nhận app đã làm theo lệnh xoá), `updateKnownTextBeforeCursor` |
 | Logic preedit | `src/preedit_logic.*` | |
 | Thời gian chờ thích nghi | `src/adaptive_wait.h` | Logic thuần, chỉ học từ số đo của backend trong lúc sửa chữ; không có monitor nền |
 | Nhận diện ứng dụng | `src/program_compatibility.*` | Danh sách terminal, IDE, office, trình duyệt, họ VS Code, Discord/Signal |
@@ -49,7 +49,7 @@ Bamboo bridge cung cấp: `ArecaBambooCreate(method, modernStyle)`, `Destroy`, `
 
 | Backend | Cách xoá | Xác nhận |
 |---|---|---|
-| Surrounding | `deleteSurroundingText(-N, N)` một lần | Probe lần đầu |
+| Surrounding | Poll tới khi snapshot có từ đang gõ, rồi `deleteSurroundingText(-N, N)` một lần | Lần đầu của ô chờ snapshot thấy chữ đã mất; quá giờ thì lượt đó dùng Backspace |
 | uinput Backspace | Backspace × N qua `/dev/uinput` | Đếm Backspace quay về engine (ACK) |
 | uinput Shift-select | Shift + Left × N rồi commit đè vùng chọn | Shift up quay về |
 | Native Backspace / Shift-select | Như trên qua libei | Không ACK |
@@ -65,10 +65,11 @@ Thứ tự chọn khi `deleteCount > 0` (`selectRewriteBackend`, `src/areca_engi
 3. Tự động: surrounding nếu verdict cho phép, còn lại Backspace.
 
 **Verdict surrounding** (theo input context, xoá khi focus, reset hay click trừ khi đang được bảo vệ 1 s sau Backspace, Ctrl+A, di chuyển):
-- Snapshot có text, cursor và anchor đều lớn hơn 0 thì được tin và vào probe.
+- Snapshot có text, cursor và anchor đều lớn hơn 0 thì được tin.
 - Ép Backspace: chương trình lập trình, terminal, office (`isProgrammingProgram`, `isTerminalProgram`, `isOfficeProgram`), và họ VS Code với capability mask `0x72`. **Giữ các danh sách này**: chúng chặn những lỗi khác với snapshot trễ, ví dụ LibreOffice báo snapshot đúng nhưng xoá bất đồng bộ.
-- **Kiểm tra snapshot trễ chạy trước khi gửi lệnh xoá**: lúc probe, snapshot phải kết thúc bằng từ đang hiện trong ô; không thì probe thất bại ngay, dùng phím, thử lại một lần ở từ kế tiếp.
-- Probe gửi lệnh xoá rồi chờ snapshot mới khớp; khi đáng lẽ không còn gì trước con trỏ thì snapshot phải rỗng mới tính là thành công. Chờ 150 ms lần đầu, 80 ms lần thử lại; hết hạn thì chuyển sang backend dự phòng.
+- **Trước mỗi lần xoá bằng surrounding**, backend poll snapshot mỗi `SurroundingPollMs` (1 ms, timer GLib, không chặn main loop) tới khi text trước con trỏ kết thúc bằng từ Bamboo đang giữ, tối đa `SurroundingCheckWaitMs` (50 ms). Khớp thì xoá rồi commit liền. Quá giờ thì chưa xoá gì: trả `NeedsFallback`, scheduler chạy lại lượt đó bằng Backspace có marker, verdict giữ nguyên.
+- **Lần xoá surrounding đầu của mỗi ô** (verdict chưa có `deleteConfirmed`): xoá xong poll tiếp tới khi snapshot cho thấy chữ đã mất (`surroundingDeleteMatches`: loại snapshot cũ, snapshot trễ, con trỏ dời trước khi ký tự bị bỏ; khi đáng lẽ không còn gì trước con trỏ thì snapshot phải rỗng), tối đa `SurroundingDeleteCheckWaitMs` (150 ms, option ẩn). Thấy thì commit và ghi `deleteConfirmed`; không thấy thì ô dùng Backspace tới khi verdict bị đánh giá lại, lượt đó cũng chạy lại bằng Backspace. Chỉ kiểm một lần, không retry.
+- Snapshot được poll là bản `set-surrounding-text` gần nhất. Không gọi lại `ibus_engine_get_surrounding_text` giữa các lần poll: client GTK chỉ phản hồi `RequireSurroundingText` lần đầu, sau đó tự gửi snapshot khi text đổi.
 
 ## Restore (sửa lại từ đã gõ)
 
@@ -109,7 +110,7 @@ Lưu ý khi port scheduler: IBus đòi `process-key-event` trả về ngay. Như
 - **Snapshot trễ là chuyện thường.** Firefox trên đường text-input-v3 (Wayland) và một số app báo surrounding chậm đúng một nhịp. Hàm so khớp lỏng (`ends_with("")` luôn đúng) từng làm app không hề xoá được bị xếp là "xoá được bằng surrounding", gây `goõ`. Firefox qua module GTK (`GTK_IM_MODULE=fcitx`, frontend D-Bus) thì snapshot đồng bộ.
 - **Snapshot trễ khác lệnh xoá hỏng.** Một app có thể báo trễ mà vẫn xoá đúng (Firefox), hoặc báo đúng mà xoá sai (LibreOffice). Kiểm tra sau commit kiểu "đoán rồi sửa bằng Backspace" đã thử và bị bỏ vì sửa nhầm thì xoá mất chữ đúng.
 - **Đừng khoá tính năng theo input context.** Trình duyệt dùng chung một context cho mọi ô trong cửa sổ; một ô lỗi sẽ kéo cả cửa sổ. Chỉ bỏ qua đúng lần không chắc chắn.
-- **Bản sao snapshot cục bộ không phải bằng chứng.** Areca tự sửa snapshot sau mỗi lần xoá hoặc commit mà không phát sự kiện; chỉ snapshot do ứng dụng gửi mới dùng để kết luận.
+- **Bản sao snapshot cục bộ không phải bằng chứng.** Areca từng tự sửa snapshot sau mỗi lần xoá hoặc commit mà không phát sự kiện; nay đã bỏ, chỉ snapshot do ứng dụng gửi mới dùng để kết luận.
 - **Wayland text-input-v3 không cho tên chương trình.** AT-SPI (`GetConnectionUnixProcessID` → `/proc/<pid>/comm`) là nguồn dự phòng, nhưng `comm` cắt ở 15 ký tự, và app không bật accessibility sẽ khiến tracker giữ tên app trước (từng nhận nhầm `ghostty`).
 - **D-Bus trên thread riêng phải dùng kết nối private.** `dbus_connection_open` trả kết nối dùng chung; gọi `dbus_connection_close` trên nó làm libdbus abort cả tiến trình lúc thoát. Dùng `dbus_connection_open_private` / `dbus_bus_get_private` và `set_exit_on_disconnect(FALSE)`.
 - **AT-SPI tốn kém.** Gộp sự kiện focus, công bố tên app ngay khi có PID, chỉ dò cây cha khi thiếu PID, timeout 200 ms, poke không chờ trả lời.
@@ -124,4 +125,4 @@ Lưu ý khi port scheduler: IBus đòi `process-key-event` trả về ngay. Như
 
 - Mang theo các test logic thuần trong `tests/` (adapter Bamboo, tách từ, so khớp snapshot, restore, scheduler, backend với `InputContext` giả). Thay `InputContext` giả bằng lớp giả của engine IBus.
 - Kịch bản tay bắt buộc trên mỗi đường frontend: gõ `gox ngon laf duwojc` (phải ra `gõ ngon là được`), thêm dấu liên tục trong một từ, Ctrl+A rồi Backspace rồi gõ tiếp, click vào giữa từ cũ rồi sửa dấu, thanh địa chỉ và ô có gợi ý của Chrome, Firefox, LibreOffice, terminal.
-- Bật log debug và đọc theo `docs/DEBUGGING.md`: `rewrite select backend`, `reliability first-probe`, `surrounding snapshot stale during probe`, `surrounding restore …`, `reset rejected`, `rewrite marker … wait_echo=` và `rewrite marker settled tx= reason=`.
+- Bật log debug và đọc theo `docs/DEBUGGING.md`: `rewrite select backend`, `reliability first-check`, `surrounding-text check tx= matched=`, `surrounding-text delete check tx= matched=`, `surrounding delete check confirmed=`, `rewrite fallback tx=`, `surrounding restore …`, `reset rejected`, `rewrite marker … wait_echo=` và `rewrite marker settled tx= reason=`.

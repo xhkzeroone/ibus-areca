@@ -5,8 +5,7 @@
 
 #include "im/im.h"
 
-#include "surrounding_probe_match.h"
-#include "surrounding_text_cache.h"
+#include "surrounding_snapshot.h"
 
 namespace areca {
 
@@ -240,8 +239,10 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
     // result is applied through the input-method protocol. This also covers
     // output tables that transform a single key without replacing old text.
     if (!result.commitText.empty()) {
+      // Không tự thêm chữ vào snapshot: backend surrounding so snapshot với từ
+      // đang gõ để biết ứng dụng đã theo kịp, chỉ snapshot ứng dụng gửi mới
+      // đáng tin.
       inputContext.commitString(result.commitText);
-      updateSurroundingCacheAfterCommit(inputContext, result.commitText);
       if (commitObserver_) {
         commitObserver_(inputContext, 0, result.commitText);
       }
@@ -260,6 +261,7 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   plan.transactionId = nextTransactionId_++;
   static_cast<RewriteTiming &>(plan) = timing;
   plan.commitText = result.commitText;
+  plan.expectedTextBeforeCursor = result.currentText;
 
   const auto selection = rewriteBackendSelector_(inputContext, result);
   if (!selection.backend) {
@@ -274,15 +276,12 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   // marker.
   const bool useMarker = backend.markerDelivery() != MarkerDelivery::None;
   plan.backspaceCount = result.deleteCount + (useMarker ? 1 : 0);
-  plan.probeSurrounding = selection.probeSurrounding;
-  if (selection.surroundingProbeTimeoutMs > 0) {
-    plan.surroundingProbeTimeoutMs = selection.surroundingProbeTimeoutMs;
-  }
+  plan.verifySurroundingDelete = selection.verifySurroundingDelete;
   if (debugProvider_()) {
     ARECA_INFO() << "areca: rewrite select backend=" << backend.name()
                  << " tx=" << plan.transactionId
-                 << " bamboo_delete=" << result.deleteCount
-                 << " probe_timeout_ms=" << plan.surroundingProbeTimeoutMs
+                 << " bamboo_delete=" << result.deleteCount << " fallback="
+                 << (selection.fallback ? selection.fallback->name() : "")
                  << " use_marker=" << useMarker
                  << " plan_backspaces=" << plan.backspaceCount;
   }
@@ -291,11 +290,18 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   pendingCommitContext_ = inputContext.watch();
   pendingCommitDeleteCount_ = result.deleteCount;
   pendingCommitText_ = result.commitText;
+  pendingPlan_ = plan;
+  pendingFallback_ = selection.fallback;
   if (!useMarker) {
     startRewrite(inputContext, backend, plan);
     return;
   }
+  commitMarkerThenApply(inputContext, backend, std::move(plan));
+}
 
+void InputScheduler::commitMarkerThenApply(im::InputContext &inputContext,
+                                           RewriteBackend &backend,
+                                           RewritePlan plan) {
   // Marker không báo commit observer: xét cả lượt, chữ trong ô vẫn là xoá
   // deleteCount ký tự rồi chèn chữ mới.
   const std::string marker(kRewriteMarker);
@@ -316,7 +322,7 @@ void InputScheduler::applyResult(im::InputContext &inputContext,
   }
   markerContext_ = inputContext.watch();
   markerBackend_ = &backend;
-  markerPlan_ = plan;
+  markerPlan_ = std::move(plan);
   markerAwaitsEcho_ = canEcho;
   if (waitMs == 0) {
     markerWaitPost_.schedule([this]() { proceedAfterMarker("no-wait"); });
@@ -424,10 +430,49 @@ void InputScheduler::rewriteDone(uint64_t transactionId,
     stalled_ = true;
     return;
   }
+  if (outcome == RewriteOutcome::NeedsFallback) {
+    startFallback();
+    return;
+  }
   activeTransactionId_ = 0;
   notifyPendingCommit();
   // Start the settle delay from the backend's actual completion barrier.
   finishKeyAfterCommit();
+}
+
+void InputScheduler::startFallback() {
+  auto *fallback = std::exchange(pendingFallback_, nullptr);
+  auto *inputContext = pendingCommitContext_.get();
+  if (!inputContext) {
+    activeTransactionId_ = 0;
+    pendingCommitContext_.unwatch();
+    pendingCommitText_.clear();
+    finishKey();
+    return;
+  }
+  if (!fallback) {
+    ARECA_ERROR() << "areca: rewrite fallback missing tx="
+                  << pendingPlan_.transactionId;
+    stalled_ = true;
+    return;
+  }
+  // Chưa có gì bị xoá: chạy lại cả lượt bằng backend dự phòng, kể cả marker
+  // nếu backend đó dùng.
+  RewritePlan plan = pendingPlan_;
+  plan.verifySurroundingDelete = false;
+  const bool useMarker = fallback->markerDelivery() != MarkerDelivery::None;
+  plan.backspaceCount = pendingCommitDeleteCount_ + (useMarker ? 1 : 0);
+  if (debugProvider_()) {
+    ARECA_INFO() << "areca: rewrite fallback tx=" << plan.transactionId
+                 << " backend=" << fallback->name()
+                 << " use_marker=" << useMarker
+                 << " plan_backspaces=" << plan.backspaceCount;
+  }
+  if (!useMarker) {
+    startRewrite(*inputContext, *fallback, plan);
+    return;
+  }
+  commitMarkerThenApply(*inputContext, *fallback, std::move(plan));
 }
 
 void InputScheduler::notifyPendingCommit() {
@@ -439,6 +484,8 @@ void InputScheduler::notifyPendingCommit() {
   }
   pendingCommitDeleteCount_ = 0;
   pendingCommitText_.clear();
+  pendingPlan_ = {};
+  pendingFallback_ = nullptr;
 }
 
 void InputScheduler::finishKey() {

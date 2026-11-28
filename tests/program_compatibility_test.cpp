@@ -134,7 +134,9 @@ int main() {
   areca::RewritePlan plan;
   assert(plan.nativeBackspaceDelayMs == 1);
   assert(plan.afterNativeBackspaceWaitMs == 10);
-  assert(plan.surroundingWaitMs == 3);
+  assert(plan.surroundingCheckWaitMs == 50);
+  assert(plan.surroundingPollMs == 1);
+  assert(plan.surroundingDeleteCheckWaitMs == 150);
   assert(plan.afterBackspaceWaitMs == 10);
   assert(plan.afterUinputShiftSelectWaitMs == 5);
 }

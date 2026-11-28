@@ -18,10 +18,9 @@ using SchedulerTiming = RewriteTiming;
 
 struct RewriteBackendSelection {
   RewriteBackend *backend = nullptr;
-  bool probeSurrounding = false;
-  // 0 giữ timing chung. Probe tự động đặt 150 ms cho lần đầu và 80 ms cho lần
-  // retry ở từ kế tiếp.
-  uint32_t surroundingProbeTimeoutMs = 0;
+  // Dùng khi `backend` báo NeedsFallback.
+  RewriteBackend *fallback = nullptr;
+  bool verifySurroundingDelete = false;
 };
 
 class InputScheduler {
@@ -86,6 +85,9 @@ private:
   void finishKeyAfterCommit();
   void rewriteDone(uint64_t transactionId, RewriteOutcome outcome);
   void notifyPendingCommit();
+  void startFallback();
+  void commitMarkerThenApply(im::InputContext &inputContext,
+                             RewriteBackend &backend, RewritePlan plan);
 
   im::EventLoop &eventLoop_;
   EngineResolver engineResolver_;
@@ -98,6 +100,10 @@ private:
   im::TrackableObjectReference<im::InputContext> pendingCommitContext_;
   uint32_t pendingCommitDeleteCount_ = 0;
   std::string pendingCommitText_;
+  // Lượt đang chạy, để chạy lại bằng backend dự phòng khi backend chính trả
+  // NeedsFallback.
+  RewritePlan pendingPlan_;
+  RewriteBackend *pendingFallback_ = nullptr;
   KeyQueue queue_;
   std::unique_ptr<im::EventSourceTime> postCommitTimer_;
   std::unique_ptr<im::EventSourceTime> markerWaitTimer_;

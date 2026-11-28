@@ -75,7 +75,6 @@ add_library(areca-core STATIC
     src/rewrite_mode.cpp
     src/sentence_capitalizer.cpp
     src/surrounding_text_backend.cpp
-    src/surrounding_text_cache.cpp
     src/surrounding_text_restore.cpp
     src/uinput_backspace_backend.cpp
     src/uinput_device.cpp

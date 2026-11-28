@@ -48,15 +48,14 @@ int main() {
                                             "Unicode", true, false, 1,
                                             {{"bt", "Be There"}});
       });
-  manager.registerProperty("preedit-surrounding-restore-test", &factory);
+  manager.registerProperty("preedit-mode-test", &factory);
 
-  bool enabled = true;
   bool backspaceRecovery = true;
   uint32_t requestedBackspaces = 0;
   areca::PreeditModeHandler::FinalizedWordEraseDone eraseDone;
   areca::PreeditModeHandler handler(
       factory, [] { return false; }, [] { return false; },
-      [&] { return backspaceRecovery; }, [&] { return enabled; },
+      [&] { return backspaceRecovery; },
       [](const areca::im::Key &key) {
         return key.normalize().sym() == areca::im::Key_space &&
                key.states().test(areca::im::KeyState::Shift);
@@ -73,14 +72,22 @@ int main() {
   context.surroundingText().setText("tưởng", 5, 5);
   handler.activate(context);
 
-  // Khi bật, từ cũ được xóa đúng một lần khỏi ứng dụng rồi chuyển vào preedit;
-  // phím mới tiếp tục sửa trên state Bamboo vừa phục hồi.
-  areca::im::KeyEvent toneKey(&context, areca::im::Key(areca::im::Key_s));
-  handler.handleKeyEvent(toneKey);
-  assert(toneKey.accepted());
-  assert(context.deletes.size() == 1);
-  assert(context.deletes[0].offset == -5);
-  assert(context.deletes[0].count == 5);
+  // Preedit không nạp lại từ đã commit trước con trỏ: phím mới bắt đầu
+  // composition riêng và không xoá gì khỏi ứng dụng.
+  areca::im::KeyEvent plainKey(&context, areca::im::Key(areca::im::Key_a));
+  handler.handleKeyEvent(plainKey);
+  assert(plainKey.accepted());
+  assert(context.deletes.empty());
+  assert(context.propertyFor(&factory)->composing == "a");
+  handler.resetContext(context);
+
+  for (const char key : std::string("tuwowngs")) {
+    areca::im::KeyEvent keyEvent(
+        &context, areca::im::Key(areca::im::Key::keySymFromUnicode(
+                      static_cast<unsigned char>(key))));
+    handler.handleKeyEvent(keyEvent);
+    assert(keyEvent.accepted());
+  }
   assert(context.propertyFor(&factory)->composing == "tướng");
 
   areca::im::KeyEvent boundary(&context, areca::im::Key(areca::im::Key_space));
@@ -102,7 +109,7 @@ int main() {
       &context, areca::im::Key(areca::im::Key_BackSpace), true);
   handler.handleKeyEvent(undoBoundaryRelease);
   assert(undoBoundaryRelease.accepted());
-  assert(context.deletes.size() == 1);
+  assert(context.deletes.empty());
   assert(requestedBackspaces == 6);
   assert(eraseDone);
   eraseDone(true);
@@ -130,109 +137,19 @@ int main() {
   assert(bypassSpace.accepted());
   assert(macroBypassContext.commits == std::vector<std::string>{"bt "});
 
-  // Click đặt caret giữa `tiến`, ngay sau `ế`: prefix `tiế` chưa hoàn chỉnh
-  // được thu hẹp tới `ế`. `ti` và `n` vẫn nằm trong app nên f tạo `tiền`.
-  TestInputContext middleContext(manager);
-  middleContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
-  middleContext.surroundingText().setText("tiến", 3, 3);
-  handler.activate(middleContext);
-  assert(handler.prepareSurroundingRestoreAfterClick(middleContext));
-  areca::im::KeyEvent middleTone(&middleContext,
-                                 areca::im::Key(areca::im::Key_f));
-  handler.handleKeyEvent(middleTone);
-  assert(middleTone.accepted());
-  assert(middleContext.deletes.size() == 1);
-  assert(middleContext.deletes[0].offset == -1);
-  assert(middleContext.deletes[0].count == 1);
-  assert(middleContext.propertyFor(&factory)->composing == "ề");
+  // Click chỉ bỏ state Bamboo khi preedit đã trống, không xoá preedit còn
+  // hiển thị.
+  TestInputContext clickContext(manager);
+  handler.activate(clickContext);
+  assert(handler.resetAfterClick(clickContext));
+  areca::im::KeyEvent clickKey(&clickContext, areca::im::Key(areca::im::Key_a));
+  handler.handleKeyEvent(clickKey);
+  assert(clickContext.propertyFor(&factory)->composing == "a");
+  assert(!handler.resetAfterClick(clickContext));
+  assert(clickContext.propertyFor(&factory)->composing == "a");
 
-  // Không được reset ngầm một preedit còn hiển thị chỉ vì tracker thấy click.
-  assert(!handler.prepareSurroundingRestoreAfterClick(middleContext));
-  assert(middleContext.propertyFor(&factory)->composing == "ề");
-
-  // Snapshot trễ (log anvildroid-gui): Areca vừa commit "gõ " nhưng app gửi
-  // lại "gõ". Restore lần này phải bị bỏ qua, không xoá gì.
-  TestInputContext laggingContext(manager);
-  laggingContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
-  laggingContext.surroundingText().setText("", 0, 0);
-  handler.activate(laggingContext);
-  for (const char key : std::string("gox ")) {
-    areca::im::KeyEvent keyEvent(
-        &laggingContext, areca::im::Key(areca::im::Key::keySymFromUnicode(
-                             static_cast<unsigned char>(key))));
-    handler.handleKeyEvent(keyEvent);
-    assert(keyEvent.accepted());
-  }
-  assert(laggingContext.commits == std::vector<std::string>{"gõ "});
-  auto *laggingState = laggingContext.propertyFor(&factory);
-  assert(laggingState->knownTextBeforeCursor == "gõ ");
-  laggingContext.surroundingText().setText("gõ", 2, 2);
-  laggingState->surroundingRestoreArmed = true;
-  areca::im::KeyEvent laggingKey(&laggingContext,
-                                 areca::im::Key(areca::im::Key_n));
-  handler.handleKeyEvent(laggingKey);
-  assert(laggingKey.accepted());
-  assert(laggingContext.deletes.empty());
-  assert(laggingState->composing == "n");
-
-  // Bỏ qua chỉ áp dụng cho lần đó: sau khi đổi ô, snapshot đúng thì restore
-  // vẫn chạy bình thường.
-  handler.deactivate(laggingContext);
-  laggingContext.surroundingText().setText("tưởng", 5, 5);
-  handler.activate(laggingContext);
-  assert(laggingState->knownTextBeforeCursor.empty());
-  areca::im::KeyEvent nextRestoreKey(&laggingContext,
-                                     areca::im::Key(areca::im::Key_s));
-  handler.handleKeyEvent(nextRestoreKey);
-  assert(nextRestoreKey.accepted());
-  assert(laggingContext.deletes.size() == 1);
-  assert(laggingState->composing == "tướng");
-
-  // Chromium báo dấu cách cuối thành NBSP: không được coi là snapshot trễ.
-  TestInputContext nbspContext(manager);
-  nbspContext.setCapabilityFlags(areca::im::CapabilityFlag::SurroundingText);
-  nbspContext.surroundingText().setText("", 0, 0);
-  handler.activate(nbspContext);
-  for (const char key : std::string("gox")) {
-    areca::im::KeyEvent keyEvent(
-        &nbspContext, areca::im::Key(areca::im::Key::keySymFromUnicode(
-                          static_cast<unsigned char>(key))));
-    handler.handleKeyEvent(keyEvent);
-  }
-  areca::im::KeyEvent nbspSpace(&nbspContext,
-                                areca::im::Key(areca::im::Key_space));
-  handler.handleKeyEvent(nbspSpace);
-  auto *nbspState = nbspContext.propertyFor(&factory);
-  assert(nbspState->knownTextBeforeCursor == "gõ ");
-  // Con trỏ lùi vào cuối "gõ" bằng phím di chuyển ứng dụng không báo: snapshot
-  // vẫn kết thúc bằng NBSP thay cho dấu cách nên restore không bị từ chối.
-  nbspContext.surroundingText().setText("gõ\u00a0", 3, 3);
-  nbspState->surroundingRestoreArmed = true;
-  areca::im::KeyEvent nbspKey(&nbspContext, areca::im::Key(areca::im::Key_n));
-  handler.handleKeyEvent(nbspKey);
-  assert(nbspKey.accepted());
-  assert(nbspContext.deletes.empty());
-  assert(nbspState->composing == "n");
-
-  // Khi tắt, cùng snapshot chỉ tạo preedit từ phím mới và tuyệt đối không xóa
-  // phần text đã commit trước con trỏ.
-  enabled = false;
-  TestInputContext disabledContext(manager);
-  disabledContext.setCapabilityFlags(
-      areca::im::CapabilityFlag::SurroundingText);
-  disabledContext.surroundingText().setText("tưởng", 5, 5);
-  handler.activate(disabledContext);
-  areca::im::KeyEvent plainKey(&disabledContext,
-                               areca::im::Key(areca::im::Key_a));
-  handler.handleKeyEvent(plainKey);
-  assert(plainKey.accepted());
-  assert(disabledContext.deletes.empty());
-  assert(disabledContext.propertyFor(&factory)->composing == "a");
-
-  // Regression macro `k → không`: snapshot thiếu dấu chấm có thể tới trễ sau
-  // khi macro đã commit. Space là boundary nên không được hút "không" vào
-  // Bamboo; nếu restore nhầm sẽ xóa từ và tạo kết quả lặp kiểu "không.hông ".
-  enabled = true;
+  // Regression macro `k → không`: Space là boundary nên không được hút "không"
+  // trước con trỏ vào Bamboo, tránh kết quả lặp kiểu "không.hông ".
   TestInputContext macroBoundaryContext(manager);
   macroBoundaryContext.setCapabilityFlags(
       areca::im::CapabilityFlag::SurroundingText);
@@ -244,7 +161,6 @@ int main() {
   assert(!macroSpace.accepted());
   assert(macroBoundaryContext.deletes.empty());
   assert(macroBoundaryContext.propertyFor(&factory)->composing.empty());
-  assert(!macroBoundaryContext.propertyFor(&factory)->surroundingRestoreArmed);
 
   // App không có SurroundingText dùng backend Backspace để xóa chính xác từ
   // vừa commit cùng boundary rồi đưa từ trở lại preedit.

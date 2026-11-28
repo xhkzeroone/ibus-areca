@@ -629,19 +629,13 @@ int main() {
       [](const areca::im::Key &) { return false; });
   boundaryHandler.activate(boundaryContext);
   auto *boundaryState = boundaryContext.propertyFor(&boundaryFactory);
-  assert(boundaryState->wordSerial == 0);
-  assert(!boundaryState->wordBoundaryPending);
   areca::im::KeyEvent trailingSpace(&boundaryContext,
                                     areca::im::Key(areca::im::Key_space));
   boundaryHandler.handleKeyEvent(trailingSpace);
   assert(!boundaryState->surroundingRestoreArmed);
-  assert(boundaryState->wordSerial == 0);
-  assert(boundaryState->wordBoundaryPending);
   areca::im::KeyEvent nextLetter(&boundaryContext,
                                  areca::im::Key(areca::im::Key_a));
   boundaryHandler.handleKeyEvent(nextLetter);
-  assert(boundaryState->wordSerial == 1);
-  assert(!boundaryState->wordBoundaryPending);
   assert((boundaryContext.events ==
           std::vector<std::string>{"commit: ", "commit:a"}));
   assert(boundaryContext.propertyFor(&boundaryFactory)->engine->currentText() ==
@@ -657,7 +651,6 @@ int main() {
   assert(overrideEntry.afterBackspaceWaitMs.value() == -1);
   assert(overrideEntry.uinputShiftSelectDelayMs.value() == -1);
   assert(overrideEntry.afterUinputShiftSelectWaitMs.value() == -1);
-  assert(overrideEntry.surroundingWaitMs.value() == -1);
   assert(overrideEntry.nativeBackspaceDelayMs.value() == -1);
   assert(overrideEntry.afterNativeBackspaceWaitMs.value() == -1);
   assert(overrideEntry.postCommitDelayMs.value() == -1);
@@ -675,7 +668,9 @@ int main() {
   areca::AdvancedConfig advancedConfig;
   assert(advancedConfig.useUinputInsteadOfForwardKey.value());
   assert(!advancedConfig.useNativeInsteadOfUinput.value());
-  assert(advancedConfig.surroundingProbeTimeoutMs.value() == 80);
+  assert(advancedConfig.surroundingCheckWaitMs.value() == 50);
+  assert(advancedConfig.surroundingPollMs.value() == 1);
+  assert(advancedConfig.surroundingDeleteCheckWaitMs.value() == 150);
   assert(advancedConfig.afterUinputShiftSelectWaitMs.value() == 5);
   // Thời gian chờ sau marker không có trong app cài đặt nhưng vẫn đọc từ file.
   assert(advancedConfig.afterMarkerCommitWaitMs.value() == 10);
@@ -685,8 +680,8 @@ int main() {
     advancedConfig.load(raw);
     assert(advancedConfig.afterMarkerCommitWaitMs.value() == 25);
   }
-  // File cấu hình cũ còn khoá của Surrounding V2 đã gỡ: bỏ qua, không làm hỏng
-  // các giá trị khác.
+  // File cấu hình cũ còn khoá của Surrounding V2 và probe surrounding đã gỡ:
+  // bỏ qua, không làm hỏng các giá trị khác.
   {
     areca::AdvancedConfig legacy;
     areca::im::RawConfig raw;
@@ -694,8 +689,11 @@ int main() {
     raw.setValueByPath("SurroundingDeleteDelayMs", "30");
     raw.setValueByPath("AfterSurroundingDeleteWaitMs", "7");
     raw.setValueByPath("SurroundingWaitMs", "5");
+    raw.setValueByPath("SurroundingProbeTimeoutMs", "40");
+    raw.setValueByPath("SurroundingCheckWaitMs", "30");
     legacy.load(raw);
-    assert(legacy.surroundingWaitMs.value() == 5);
+    assert(legacy.surroundingCheckWaitMs.value() == 30);
+    assert(legacy.surroundingPollMs.value() == 1);
   }
 
   areca::ArecaConfig mainConfig;

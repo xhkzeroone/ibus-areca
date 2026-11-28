@@ -116,9 +116,6 @@ ARECA_CONFIGURATION(
     im::HiddenOption<int, im::IntConstrain> afterUinputShiftSelectWaitMs{
         this, "AfterUinputShiftSelectWaitMs", N_("Delay theo ứng dụng"), -1,
         im::IntConstrain(-1, 5000)};
-    im::HiddenOption<int, im::IntConstrain> surroundingWaitMs{
-        this, "SurroundingWaitMs", N_("Delay theo ứng dụng"), -1,
-        im::IntConstrain(-1, 5000)};
     // Khoá "XTest..." giữ tên cũ để file conf đã lưu vẫn đọc được.
     im::HiddenOption<int, im::IntConstrain> nativeBackspaceDelayMs{
         this, "XTestBackspaceDelayMs", N_("Delay theo ứng dụng"), -1,
@@ -180,13 +177,22 @@ ARECA_CONFIGURATION(
     im::Option<int, im::IntConstrain> afterUinputShiftSelectWaitMs{
         this, "AfterUinputShiftSelectWaitMs",
         N_("Chờ sau khi thả Shift uinput (ms)"), 5, im::IntConstrain(0, 5000)};
-    im::Option<int, im::IntConstrain> surroundingWaitMs{
-        this, "SurroundingWaitMs", N_("Chờ sau xóa surrounding text (ms)"), 3,
+    // Surrounding đọc lại snapshot theo nhịp cho tới khi text trước con trỏ
+    // khớp từ đang gõ. Quá SurroundingCheckWaitMs thì lượt đó xoá bằng
+    // Backspace có marker.
+    im::HiddenOption<int, im::IntConstrain> surroundingCheckWaitMs{
+        this, "SurroundingCheckWaitMs",
+        N_("Chờ tối đa snapshot khớp trước khi xoá surrounding (ms)"), 50,
         im::IntConstrain(0, 5000)};
-    im::HiddenOption<int, im::IntConstrain> surroundingProbeTimeoutMs{
-        this, "SurroundingProbeTimeoutMs",
-        N_("Timeout kiểm tra surrounding text (ms)"), 80,
+    im::HiddenOption<int, im::IntConstrain> surroundingPollMs{
+        this, "SurroundingPollMs", N_("Nhịp đọc lại surrounding (ms)"), 1,
         im::IntConstrain(1, 1000)};
+    // Lượt sửa đầu của mỗi ô: xoá xong chờ snapshot thấy chữ đã mất. Có ứng
+    // dụng báo surrounding đúng nhưng lờ lệnh xoá.
+    im::HiddenOption<int, im::IntConstrain> surroundingDeleteCheckWaitMs{
+        this, "SurroundingDeleteCheckWaitMs",
+        N_("Chờ tối đa snapshot xác nhận đã xoá surrounding (ms)"), 150,
+        im::IntConstrain(1, 5000)};
     // Các key "XTest..." giữ tên cũ để file conf đã lưu vẫn đọc được.
     im::Option<int, im::IntConstrain> nativeBackspaceDelayMs{
         this, "XTestBackspaceDelayMs",
