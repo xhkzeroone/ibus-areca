@@ -56,12 +56,11 @@ public:
   using FinalizedWordEraser =
       std::function<bool(im::InputContext &, uint32_t, FinalizedWordEraseDone)>;
 
-  PreeditModeHandler(
-      StateFactory &stateFactory, DebugProvider debugProvider,
-      AutoCapitalizeProvider autoCapitalizeProvider,
-      BackspaceRecoveryProvider backspaceRecoveryProvider,
-      MacroBypassMatcher macroBypassMatcher,
-      FinalizedWordEraser finalizedWordEraser);
+  PreeditModeHandler(StateFactory &stateFactory, DebugProvider debugProvider,
+                     AutoCapitalizeProvider autoCapitalizeProvider,
+                     BackspaceRecoveryProvider backspaceRecoveryProvider,
+                     MacroBypassMatcher macroBypassMatcher,
+                     FinalizedWordEraser finalizedWordEraser);
   void activate(im::InputContext &inputContext) override;
   void deactivate(im::InputContext &inputContext) override;
   void handleKeyEvent(im::KeyEvent &event) override;
